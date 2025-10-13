@@ -1,0 +1,45 @@
+{
+    "name": "lstep-automation",
+    "version": "1.0.0",
+    "description": "LステップCSV自動エクスポート・Googleスプレッドシート連携ツール",
+    "main": "src/index.js",
+    "type": "module",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "NODE_ENV=development node src/index.js",
+        "setup": "node src/setup.js",
+        "test:sheets": "node src/test-sheets.js",
+        "logs": "tail -n 100 logs/$(date +%Y-%m-%d).log",
+        "logs:watch": "tail -f logs/$(date +%Y-%m-%d).log",
+        "logs:errors": "grep ERROR logs/$(date +%Y-%m-%d).log",
+        "clean-logs": "find logs -name '*.log' -mtime +30 -delete && find logs -name '*.png' -mtime +30 -delete",
+        "test": "node --test src/**/*.test.js",
+        "format": "prettier --write \"src/**/*.js\"",
+        "validate": "node src/validate-config.js"
+    },
+    "keywords": [
+        "lstep",
+        "automation",
+        "puppeteer",
+        "google-sheets",
+        "csv-export"
+    ],
+    "author": "Your Company",
+    "license": "UNLICENSED",
+    "private": true,
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=9.0.0"
+    },
+    "dependencies": {
+        "csv-parse": "^5.5.3",
+        "dotenv": "^16.6.1",
+        "googleapis": "^130.0.0",
+        "iconv-lite": "^0.6.3",
+        "puppeteer": "^21.7.0",
+        "winston": "^3.11.0"
+    },
+    "devDependencies": {
+        "prettier": "^3.1.1"
+    }
+}

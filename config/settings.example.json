@@ -1,0 +1,56 @@
+{
+    "clients": [
+      {
+        "name": "クライアントA - 毎日",
+        "exporterUrl": "https://manager.linestep.net/line/exporter/123456",
+        "presetName": "毎日エクスポート",
+        "sheetId": "1abc123def456ghi789jklmno012pqr345stu678vwx",
+        "sheetName": "Raw_Lステップ"
+      },
+      {
+        "name": "クライアントB - 週次",
+        "exporterUrl": "https://manager.linestep.net/line/exporter/789012",
+        "presetName": "週次レポート",
+        "sheetId": "1xyz987wvu654tsr321qpo098nml876kji543hgf210",
+        "sheetName": "Raw_Lステップ"
+      },
+      {
+        "name": "クライアントC - テスト",
+        "exporterUrl": "https://manager.linestep.net/line/exporter/345678",
+        "presetName": "テスト用プリセット",
+        "sheetId": "1mno456pqr789stu012vwx345yzabcd678efghi012jkl",
+        "sheetName": "テストシート"
+      }
+    ],
+    "options": {
+      "timeout": 60000,
+      "retryCount": 3,
+      "retryDelay": 5000,
+      "headless": true,
+      "slowMo": 100,
+      "waitForNetworkIdle": true,
+      "screenshotOnError": true,
+      "stopOnError": false,
+      "cleanupDownloads": true
+    },
+    "logging": {
+      "level": "info",
+      "maxFiles": 30,
+      "maxSize": "10m"
+    },
+    "_comments": {
+      "clients": "複数のクライアントを配列で管理。順番に実行されます。",
+      "name": "管理用の名前（ログに表示される）",
+      "exporterUrl": "Lステップのエクスポートページの完全なURL",
+      "presetName": "プリセット名（完全一致必須・大文字小文字も区別）",
+      "sheetId": "スプレッドシートのID（URLの /d/ と /edit の間）",
+      "sheetName": "書き込むシート名（デフォルト: Raw_Lステップ）",
+      "timeout": "各処理のタイムアウト時間（ミリ秒）",
+      "retryCount": "失敗時のリトライ回数",
+      "retryDelay": "リトライ間隔（ミリ秒）",
+      "headless": "true=ブラウザ非表示、false=表示（デバッグ用）",
+      "slowMo": "操作速度を遅くする（ミリ秒）安定性向上",
+      "stopOnError": "true=エラー時に全体停止、false=次のクライアントに進む",
+      "cleanupDownloads": "true=ダウンロードファイルを削除、false=保持"
+    }
+  }

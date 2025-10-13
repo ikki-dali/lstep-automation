@@ -1,0 +1,27 @@
+{
+  "clients": [
+    {
+      "name": "FD採用",
+      "exporterUrl": "https://manager.linestep.net/line/exporter/8EXE9PNEJjeMUSrD/list",
+      "presetName": "member_202509191045",
+      "sheetId": "1xsNMLFyaKDH9KsdfUqlZPDZC6pb46vpiu6Ccw_ZJwi0",
+      "sheetName": "Raw_Lステップ"
+    }
+  ],
+  "options": {
+    "timeout": 60000,
+    "retryCount": 3,
+    "retryDelay": 5000,
+    "headless": true,
+    "slowMo": 100,
+    "waitForNetworkIdle": true,
+    "screenshotOnError": true,
+    "stopOnError": false,
+    "cleanupDownloads": true
+  },
+  "logging": {
+    "level": "info",
+    "maxFiles": 30,
+    "maxSize": "10m"
+  }
+}
