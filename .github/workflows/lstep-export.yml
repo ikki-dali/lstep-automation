@@ -25,4 +25,6 @@ jobs:
     - name: Run LSTEP export
       env:
         GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        LSTEP_EMAIL: ${{ secrets.LSTEP_EMAIL }}
+        LSTEP_PASSWORD: ${{ secrets.LSTEP_PASSWORD }}
       run: npm start
