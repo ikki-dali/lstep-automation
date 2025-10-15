@@ -12,12 +12,13 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4  # v3 → v4 に変更
     
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4  # v3 → v4 に変更
       with:
         node-version: '18'
+        cache: 'npm'  # キャッシュを追加
     
     - name: Install dependencies
       run: npm ci
