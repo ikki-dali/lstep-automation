@@ -97,7 +97,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
   const {
     timeout = 60000,
     screenshotOnError = true,
-    headless = false,
+    headless = true,
   } = options;
 
   await ensureDirectories();
@@ -111,17 +111,48 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
   let browser;
   let downloadedFile = null;
   let needsLogin = false;
+  let actualHeadless = headless;
 
   try {
-    console.log('🚀 ブラウザ起動中...');
-    
-    browser = await puppeteer.launch({
-      headless: false,
+    // ステップ0: ログイン状態を確認（高速チェック）
+    console.log('🔍 ログイン状態を確認中...');
+
+    const checkBrowser = await puppeteer.launch({
+      headless: true,  // チェックは常にheadless
       executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       userDataDir: BROWSER_DATA_DIR,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
-    
+
+    const checkPage = await checkBrowser.newPage();
+    await checkPage.goto(exporterUrl, {
+      waitUntil: 'networkidle0',
+      timeout: timeout,
+    }).catch(() => {});
+
+    const pageTitle = await checkPage.title();
+    needsLogin = pageTitle.includes('ログイン');
+
+    await checkBrowser.close();
+
+    // ログインが必要な場合はheadless: falseに変更
+    if (needsLogin) {
+      actualHeadless = false;
+      console.log('⚠️  ログインが必要です → ブラウザを表示モードで起動します');
+    } else {
+      console.log('✅ ログイン済み → ヘッドレスモードで続行します');
+    }
+
+    // 本番ブラウザを起動
+    console.log('🚀 ブラウザ起動中...');
+
+    browser = await puppeteer.launch({
+      headless: actualHeadless,
+      executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      userDataDir: BROWSER_DATA_DIR,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
     let page = await browser.newPage();
     console.log('✅ ブラウザ起動完了');
 
@@ -132,45 +163,46 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     });
 
     console.log('📍 ステップ1: エクスポートページにアクセス');
-    
+
     await page.goto(exporterUrl, {
       waitUntil: 'networkidle0',
       timeout: timeout,
     });
 
-    let pageTitle = await page.title();
-    console.log(`   ページタイトル: ${pageTitle}`);
+    let currentPageTitle = await page.title();
+    console.log(`   ページタイトル: ${currentPageTitle}`);
 
-    if (pageTitle.includes('ログイン')) {
-      needsLogin = true;
+    if (currentPageTitle.includes('ログイン')) {
       await waitForLogin(page);
-      
+
       await page.goto(exporterUrl, {
         waitUntil: 'networkidle0',
         timeout: timeout,
       });
-      
-      pageTitle = await page.title();
-      console.log(`   ログイン後のページタイトル: ${pageTitle}`);
+
+      currentPageTitle = await page.title();
+      console.log(`   ログイン後のページタイトル: ${currentPageTitle}`);
     }
 
     let currentUrl = page.url();
     console.log(`   現在のURL: ${currentUrl}`);
-    
-    if (currentUrl.includes('/friend') || currentUrl.includes('/line/show') || pageTitle.includes('友だち')) {
+
+    if (currentUrl.includes('/friend') || currentUrl.includes('/line/show') || currentPageTitle.includes('友だち')) {
       const exportPage = await navigateToExportPage(page, browser);
-      
+
       await exportPage.waitForTimeout(2000);
-      
+
       console.log(`   新しいページURL: ${exportPage.url()}`);
       const newTitle = await exportPage.title();
       console.log(`   新しいページタイトル: ${newTitle}`);
-      
+
       page = exportPage;
     }
 
-    if (!needsLogin) {
-      console.log('📌 ログイン済みです。バックグラウンドで実行します');
+    if (actualHeadless) {
+      console.log('📌 ヘッドレスモードで実行中（ブラウザ非表示）');
+    } else {
+      console.log('📌 ブラウザ表示モードで実行中');
     }
 
     console.log('📍 ステップ2: プリセット選択');
