@@ -1,0 +1,2 @@
+# LSTEP自動化 - 2時間ごとに実行
+0 */2 * * * cd /Users/yamamotoikki/Lstep_Automation_local && /usr/local/bin/node src/index.js >> logs/cron.log 2>&1
