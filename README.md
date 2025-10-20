@@ -34,9 +34,17 @@ LSTEP_PASSWORD=your-password
 
 ### 4. Google Sheets APIの認証設定
 
-Google Cloud Console でサービスアカウントを作成し、`credentials.json` をプロジェクトルートに配置してください。
+**重要**: サービスアカウントキーは既にリポジトリに含まれています（`config/credentials.json`）。
 
-詳細: https://developers.google.com/sheets/api/quickstart/nodejs
+各自が行う作業:
+1. 自分のGoogle Spreadsheetsを開く
+2. 右上の「共有」ボタンをクリック
+3. 以下のメールアドレスに**編集者権限**を付与:
+   ```
+   lstep-automation@adfin-n8n.iam.gserviceaccount.com
+   ```
+
+これで自動化ツールがスプレッドシートに書き込めるようになります。
 
 ### 5. クライアント設定
 

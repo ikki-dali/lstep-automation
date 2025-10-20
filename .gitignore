@@ -1,7 +1,7 @@
 # ========================================
 # 🔴 認証情報（絶対に公開NG）
 # ========================================
-config/credentials.json
+# config/credentials.json は共有用（privateリポジトリのみ）
 config/credentials.*.json
 .env
 .env.*
