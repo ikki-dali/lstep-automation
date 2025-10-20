@@ -13,6 +13,9 @@ const LOGS_DIR = path.join(process.cwd(), 'logs');
 const LSTEP_EMAIL = process.env.LSTEP_EMAIL;
 const LSTEP_PASSWORD = process.env.LSTEP_PASSWORD;
 
+// Chrome実行パス（環境変数で指定可能、未指定時はPuppeteerのデフォルトChromiumを使用）
+const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH || undefined;
+
 async function ensureDirectories() {
   await fs.mkdir(BROWSER_DATA_DIR, { recursive: true });
   await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
@@ -117,12 +120,18 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     // ステップ0: ログイン状態を確認（高速チェック）
     console.log('🔍 ログイン状態を確認中...');
 
-    const checkBrowser = await puppeteer.launch({
+    const launchOptions = {
       headless: true,  // チェックは常にheadless
-      executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       userDataDir: BROWSER_DATA_DIR,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    };
+
+    // 環境変数でChrome実行パスが指定されている場合のみ設定
+    if (CHROME_EXECUTABLE_PATH) {
+      launchOptions.executablePath = CHROME_EXECUTABLE_PATH;
+    }
+
+    const checkBrowser = await puppeteer.launch(launchOptions);
 
     const checkPage = await checkBrowser.newPage();
     await checkPage.goto(exporterUrl, {
@@ -146,12 +155,18 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     // 本番ブラウザを起動
     console.log('🚀 ブラウザ起動中...');
 
-    browser = await puppeteer.launch({
+    const mainLaunchOptions = {
       headless: actualHeadless,
-      executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       userDataDir: BROWSER_DATA_DIR,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    };
+
+    // 環境変数でChrome実行パスが指定されている場合のみ設定
+    if (CHROME_EXECUTABLE_PATH) {
+      mainLaunchOptions.executablePath = CHROME_EXECUTABLE_PATH;
+    }
+
+    browser = await puppeteer.launch(mainLaunchOptions);
 
     let page = await browser.newPage();
     console.log('✅ ブラウザ起動完了');
