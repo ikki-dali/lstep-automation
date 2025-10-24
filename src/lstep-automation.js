@@ -13,8 +13,8 @@ const LOGS_DIR = path.join(process.cwd(), 'logs');
 const LSTEP_EMAIL = process.env.LSTEP_EMAIL;
 const LSTEP_PASSWORD = process.env.LSTEP_PASSWORD;
 
-// Chrome実行パス（環境変数で指定可能、未指定時はPuppeteerのデフォルトChromiumを使用）
-const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH || undefined;
+// Chrome実行パス（環境変数で指定可能、未指定時はシステムのGoogle Chromeを使用）
+const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 async function ensureDirectories() {
   await fs.mkdir(BROWSER_DATA_DIR, { recursive: true });
@@ -113,17 +113,20 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
 
   let browser;
   let downloadedFile = null;
-  let needsLogin = false;
-  let actualHeadless = headless;
 
   try {
-    // ステップ0: ログイン状態を確認（高速チェック）
-    console.log('🔍 ログイン状態を確認中...');
+    // ブラウザを起動
+    console.log('🚀 ブラウザ起動中...');
 
     const launchOptions = {
-      headless: true,  // チェックは常にheadless
+      headless: headless === true ? 'new' : headless,
       userDataDir: BROWSER_DATA_DIR,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
+      ],
     };
 
     // 環境変数でChrome実行パスが指定されている場合のみ設定
@@ -131,42 +134,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
       launchOptions.executablePath = CHROME_EXECUTABLE_PATH;
     }
 
-    const checkBrowser = await puppeteer.launch(launchOptions);
-
-    const checkPage = await checkBrowser.newPage();
-    await checkPage.goto(exporterUrl, {
-      waitUntil: 'networkidle0',
-      timeout: timeout,
-    }).catch(() => {});
-
-    const pageTitle = await checkPage.title();
-    needsLogin = pageTitle.includes('ログイン');
-
-    await checkBrowser.close();
-
-    // ログインが必要な場合はheadless: falseに変更
-    if (needsLogin) {
-      actualHeadless = false;
-      console.log('⚠️  ログインが必要です → ブラウザを表示モードで起動します');
-    } else {
-      console.log('✅ ログイン済み → ヘッドレスモードで続行します');
-    }
-
-    // 本番ブラウザを起動
-    console.log('🚀 ブラウザ起動中...');
-
-    const mainLaunchOptions = {
-      headless: actualHeadless,
-      userDataDir: BROWSER_DATA_DIR,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    };
-
-    // 環境変数でChrome実行パスが指定されている場合のみ設定
-    if (CHROME_EXECUTABLE_PATH) {
-      mainLaunchOptions.executablePath = CHROME_EXECUTABLE_PATH;
-    }
-
-    browser = await puppeteer.launch(mainLaunchOptions);
+    browser = await puppeteer.launch(launchOptions);
 
     let page = await browser.newPage();
     console.log('✅ ブラウザ起動完了');
@@ -188,6 +156,45 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     console.log(`   ページタイトル: ${currentPageTitle}`);
 
     if (currentPageTitle.includes('ログイン')) {
+      // ログインが必要な場合、ヘッドレスモードだったら再起動
+      if (headless) {
+        console.log('⚠️  ログインセッションが期限切れです');
+        console.log('⚠️  ブラウザを表示モードで再起動します...');
+
+        // 現在のブラウザを閉じる
+        await browser.close();
+
+        // 表示モードで再起動
+        const visibleLaunchOptions = {
+          headless: false,
+          userDataDir: BROWSER_DATA_DIR,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled'
+          ],
+        };
+
+        if (CHROME_EXECUTABLE_PATH) {
+          visibleLaunchOptions.executablePath = CHROME_EXECUTABLE_PATH;
+        }
+
+        browser = await puppeteer.launch(visibleLaunchOptions);
+        page = await browser.newPage();
+
+        const client = await page.target().createCDPSession();
+        await client.send('Page.setDownloadBehavior', {
+          behavior: 'allow',
+          downloadPath: DOWNLOADS_DIR,
+        });
+
+        await page.goto(exporterUrl, {
+          waitUntil: 'networkidle0',
+          timeout: timeout,
+        });
+      }
+
       await waitForLogin(page);
 
       await page.goto(exporterUrl, {
@@ -214,7 +221,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
       page = exportPage;
     }
 
-    if (actualHeadless) {
+    if (headless) {
       console.log('📌 ヘッドレスモードで実行中（ブラウザ非表示）');
     } else {
       console.log('📌 ブラウザ表示モードで実行中');

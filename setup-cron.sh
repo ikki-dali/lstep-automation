@@ -1,103 +1,103 @@
 #!/bin/bash
 
-echo "=========================================="
-echo "   LSTEP自動化 - cron設定スクリプト"
-echo "=========================================="
-echo ""
+# Cron設定ヘルパースクリプト
+# 2時間おきにLSTEP CSVエクスポートを実行
 
-# 現在のディレクトリを取得
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-NODE_PATH=$(which node)
+PROJECT_DIR="$SCRIPT_DIR"
 
-echo "📂 プロジェクトパス: $SCRIPT_DIR"
-echo "🔧 Node.jsパス: $NODE_PATH"
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                                                            ║"
+echo "║           Cron設定 - 2時間おきに自動実行                    ║"
+echo "║                                                            ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# スケジュール選択
-echo "実行スケジュールを選択してください："
-echo "1) 1時間ごと（毎時0分）"
-echo "2) 2時間ごと"
-echo "3) 4時間ごと"
-echo "4) 毎日1回（9時）"
-echo "5) カスタム"
+echo "プロジェクトディレクトリ: $PROJECT_DIR"
 echo ""
 
-read -p "選択 (1-5): " choice
+# npmのパスを検出
+NPM_PATH=$(which npm)
+if [ -z "$NPM_PATH" ]; then
+    NPM_PATH="/usr/local/bin/npm"
+fi
 
-case $choice in
-  1)
-    CRON_SCHEDULE="0 * * * *"
-    DESCRIPTION="1時間ごと（毎時0分）"
-    ;;
-  2)
-    CRON_SCHEDULE="0 */2 * * *"
-    DESCRIPTION="2時間ごと"
-    ;;
-  3)
-    CRON_SCHEDULE="0 */4 * * *"
-    DESCRIPTION="4時間ごと"
-    ;;
-  4)
-    CRON_SCHEDULE="0 9 * * *"
-    DESCRIPTION="毎日9時"
-    ;;
-  5)
-    read -p "cron式を入力 (例: 0 */2 * * *): " CRON_SCHEDULE
-    DESCRIPTION="カスタム: $CRON_SCHEDULE"
-    ;;
-  *)
-    echo "❌ 無効な選択です"
+# Cron設定を表示
+CRON_ENTRY="0 */2 * * * cd $PROJECT_DIR && $NPM_PATH start >> $PROJECT_DIR/logs/cron.log 2>&1"
+
+echo "以下のcron設定を追加します:"
+echo ""
+echo "$CRON_ENTRY"
+echo ""
+echo "説明: 2時間おきの00分に実行 (0:00, 2:00, 4:00, 6:00...)"
+echo ""
+
+# 確認
+read -p "この設定でよろしいですか？ (y/n): " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "キャンセルしました。"
     exit 1
-    ;;
-esac
-
-echo ""
-echo "設定内容："
-echo "  スケジュール: $DESCRIPTION"
-echo "  cron式: $CRON_SCHEDULE"
-echo ""
-
-read -p "この設定でよろしいですか？ (y/n): " confirm
-
-if [[ $confirm != "y" && $confirm != "Y" ]]; then
-  echo "キャンセルしました"
-  exit 0
 fi
 
-# cron設定
-CRON_COMMAND="$CRON_SCHEDULE cd $SCRIPT_DIR && $NODE_PATH src/index.js >> logs/cron.log 2>&1"
+# 既存のcrontabを取得
+TEMP_CRON=$(mktemp)
+crontab -l > "$TEMP_CRON" 2>/dev/null || true
 
-# 既存のcronを確認
-EXISTING_CRON=$(crontab -l 2>/dev/null | grep "lstep-automation\|Lstep_Automation")
+# 重複チェック
+if grep -q "Lstep_Automation_local" "$TEMP_CRON"; then
+    echo ""
+    echo "⚠️  既存のLSTEP自動化エントリが見つかりました。"
+    echo ""
+    grep "Lstep_Automation_local" "$TEMP_CRON"
+    echo ""
+    read -p "既存のエントリを削除して新しいエントリを追加しますか？ (y/n): " -n 1 -r
+    echo ""
 
-if [ ! -z "$EXISTING_CRON" ]; then
-  echo ""
-  echo "⚠️  既存のLSTEP自動化cronが見つかりました："
-  echo "$EXISTING_CRON"
-  echo ""
-  read -p "上書きしますか？ (y/n): " overwrite
-  
-  if [[ $overwrite == "y" || $overwrite == "Y" ]]; then
-    # 既存のcronを削除してから追加
-    (crontab -l 2>/dev/null | grep -v "lstep-automation\|Lstep_Automation"; echo "$CRON_COMMAND") | crontab -
-  else
-    echo "キャンセルしました"
-    exit 0
-  fi
-else
-  # 新規追加
-  (crontab -l 2>/dev/null; echo "$CRON_COMMAND") | crontab -
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # 既存エントリを削除
+        grep -v "Lstep_Automation_local" "$TEMP_CRON" > "${TEMP_CRON}.new"
+        mv "${TEMP_CRON}.new" "$TEMP_CRON"
+    else
+        echo "キャンセルしました。"
+        rm "$TEMP_CRON"
+        exit 1
+    fi
 fi
 
+# 新しいエントリを追加
+echo "" >> "$TEMP_CRON"
+echo "# LSTEP CSV自動エクスポート - 2時間おき" >> "$TEMP_CRON"
+echo "$CRON_ENTRY" >> "$TEMP_CRON"
+
+# Crontabをインストール
+crontab "$TEMP_CRON"
+rm "$TEMP_CRON"
+
 echo ""
-echo "✅ cron設定完了！"
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                                                            ║"
+echo "║                  ✅ Cron設定完了！                          ║"
+echo "║                                                            ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
-echo "現在のcron設定："
-crontab -l
+
+echo "📋 現在のcron設定:"
 echo ""
-echo "📋 次のステップ："
-echo "  1. config/settings.json で headless: true に設定"
-echo "  2. npm start でテスト実行"
-echo "  3. logs/cron.log でログ確認: tail -f logs/cron.log"
+crontab -l | grep -A 1 "LSTEP"
 echo ""
-echo "🗑️  削除する場合: crontab -r"
+
+echo "💡 便利なコマンド:"
+echo "  - cron設定を確認: crontab -l"
+echo "  - cron設定を編集: crontab -e"
+echo "  - cron設定を削除: crontab -r"
+echo "  - ログを確認: tail -f $PROJECT_DIR/logs/cron.log"
+echo ""
+
+echo "⚠️  重要な注意事項:"
+echo "  1. Macがスリープ中は実行されません"
+echo "  2. 初回実行時にログインが必要な場合、ブラウザが表示されます"
+echo "  3. ログインセッションを保持するため、定期的にnpm run setupを実行してください"
+echo ""

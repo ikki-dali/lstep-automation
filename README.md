@@ -23,79 +23,129 @@ cd lstep-automation
 npm install
 ```
 
-### 3. 環境変数を設定
+### 3. Google Sheets APIの認証設定
 
-`.env`ファイルを作成してLステップの認証情報を設定:
+Google Cloud Consoleでサービスアカウントを作成し、JSONキーをダウンロード:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+2. プロジェクトを作成または選択
+3. Google Sheets APIを有効化
+4. サービスアカウントを作成してJSONキーをダウンロード
+5. ダウンロードしたJSONファイルを `config/credentials.json` として保存
 
 ```bash
-LSTEP_EMAIL=your-email@example.com
-LSTEP_PASSWORD=your-password
+cp config/credentials.example.json config/credentials.json
+# エディタで編集してGoogle Cloud Consoleからダウンロードした内容をペースト
 ```
 
-### 4. Google Sheets APIの認証設定
+**重要**: サービスアカウントのメールアドレス（JSONの`client_email`）に、対象のGoogle Sheetsの**編集者権限**を付与してください。
 
-**重要**: サービスアカウントキーは既にリポジトリに含まれています（`config/credentials.json`）。
+### 4. クライアント設定
 
-各自が行う作業:
-1. 自分のGoogle Spreadsheetsを開く
-2. 右上の「共有」ボタンをクリック
-3. 以下のメールアドレスに**編集者権限**を付与:
-   ```
-   lstep-automation@adfin-n8n.iam.gserviceaccount.com
-   ```
+`config/settings.json` を作成:
 
-これで自動化ツールがスプレッドシートに書き込めるようになります。
+```bash
+cp config/settings.example.json config/settings.json
+# エディタで以下を設定:
+# - exporterUrl: LステップのエクスポートページURL
+# - presetName: 使用するプリセット名
+# - sheetId: アップロード先のGoogle Sheets ID
+# - sheetName: アップロード先のシート名
+```
 
-### 5. クライアント設定
+### 5. 初回ログインセッションを保存
 
-`config/settings.json` で以下を設定:
+ブラウザが開くので、手動でログイン（reCAPTCHA含む）してください:
 
-- `exporterUrl`: LステップのエクスポートページURL
-- `presetName`: 使用するプリセット名
-- `sheetId`: アップロード先のGoogle Sheets ID
-- `sheetName`: アップロード先のシート名
+```bash
+npm run setup
+```
 
-### 6. 初回ログイン
+ログイン後、ブラウザセッションが保存され、次回からは自動実行されます。
 
-初回実行時はブラウザが表示されるので、手動でログイン（reCAPTCHA含む）してください:
+**注意**: ログインセッションは約30日で期限切れになります。期限切れの場合、自動的にブラウザが表示モードで起動し、再ログインを促します。
+
+### 6. 動作確認
 
 ```bash
 npm start
 ```
 
-ログイン後、ブラウザセッションが保存され、次回からは自動実行されます。
+## 自動実行設定（Cron）
 
-## 自動実行設定（cron）
-
-2時間ごとに自動実行する場合:
+2時間おきに自動実行する場合:
 
 ```bash
-crontab mycron.txt
+npm run setup:cron
 ```
 
-設定内容（`mycron.txt`）:
-```
-0 */2 * * * cd /path/to/lstep-automation && /usr/local/bin/node src/index.js >> logs/cron.log 2>&1
-```
+対話形式でcron設定が完了します。実行スケジュール: 0:00, 2:00, 4:00, 6:00...
 
 **重要**: パスは各自の環境に合わせて修正してください。
 
+## 便利なコマンド
+
+```bash
+# ログを確認
+npm run logs
+
+# ログをリアルタイム監視
+npm run logs:watch
+
+# エラーのみ表示
+npm run logs:errors
+
+# 古いログを削除（30日以上前）
+npm run clean-logs
+
+# デバッグモード（ブラウザ表示）
+npm run dev
+```
+
+## 主な機能
+
+### ✅ 自動ログイン復旧
+ログインセッションが期限切れの場合、自動的にブラウザを表示モードで起動し、手動ログインを促します。ログイン完了後、自動的に処理を継続します。
+
+### ✅ AppleシリコンMac対応
+システムにインストールされているGoogle Chromeを使用することで、M1/M2/M3 Macでも問題なく動作します。
+
+### ✅ リトライ機能
+ネットワークエラーやタイムアウトの際、自動的に3回までリトライします。
+
+### ✅ エラー時スクリーンショット
+エラー発生時、自動的にスクリーンショットを保存し、問題の特定を容易にします。
+
 ## トラブルシューティング
 
-### エクスポートが失敗する
+### ブラウザ起動エラー (socket hang up)
 
-- `logs/` ディレクトリ内のスクリーンショットを確認
-- ログイン状態が切れている場合は、手動で再実行してログイン
+**原因**: AppleシリコンMacでPuppeteerのバンドルChromiumが動作しない
+
+**解決策**: システムのGoogle Chromeを使用するよう設定済み（自動対応）
+
+### ログインセッション期限切れ
+
+**症状**: ログインページが表示される
+
+**解決策**: 自動的にブラウザが表示されるので、手動でログインしてください
 
 ### プリセットが見つからない
 
 - `config/settings.json` の `presetName` がLステップ上の名前と完全一致しているか確認
 - プリセット名に余分なスペースや特殊文字がないか確認
+- `logs/` ディレクトリ内のスクリーンショットを確認
 
 ### ダウンロードがタイムアウトする
 
 - `config/settings.json` の `timeout` 値を増やす（デフォルト: 60000ms）
 - ネットワーク接続を確認
+
+### Cron実行時にブラウザが表示されない
+
+**原因**: Macがスリープ中、またはcronがバックグラウンドで実行中
+
+**解決策**: 初回ログイン時は`npm run setup`を手動で実行してセッションを保存してください
 
 ## ファイル構成
 
