@@ -13,8 +13,8 @@ const LOGS_DIR = path.join(process.cwd(), 'logs');
 const LSTEP_EMAIL = process.env.LSTEP_EMAIL;
 const LSTEP_PASSWORD = process.env.LSTEP_PASSWORD;
 
-// Chrome実行パス（環境変数で指定可能、未指定時はシステムのGoogle Chromeを使用）
-const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+// Chrome実行パス（環境変数で指定可能、未指定時はPuppeteerのbundled Chromiumを使用）
+const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH;
 
 async function ensureDirectories() {
   await fs.mkdir(BROWSER_DATA_DIR, { recursive: true });
