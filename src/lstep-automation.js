@@ -156,6 +156,11 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     console.log(`   ページタイトル: ${currentPageTitle}`);
 
     if (currentPageTitle.includes('ログイン')) {
+      // CI環境（GitHub Actions等）ではログインできないのでエラー
+      if (process.env.CI) {
+        throw new Error('ログインセッションが期限切れです。CI環境ではログインできません。ローカル環境で npm run setup を実行してセッションを更新してください。');
+      }
+
       // ログインが必要な場合、ヘッドレスモードだったら再起動
       if (headless) {
         console.log('⚠️  ログインセッションが期限切れです');
