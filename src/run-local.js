@@ -92,7 +92,7 @@ async function run() {
           userDataDir,
           // cookies は渡さない（userDataDirのセッションを優先）
           profile: client.profile || null,
-          headless: false // ローカルではブラウザ表示
+          headless: true // バックグラウンド実行（ログイン必要時は自動でブラウザ表示）
         }
       );
       
