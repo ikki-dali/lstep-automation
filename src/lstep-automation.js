@@ -276,48 +276,35 @@ async function switchLineAccount(page, targetAccountName) {
     // ヘッダー右端のアカウントドロップダウンをクリック
     let dropdownOpened = false;
     
-    // 方法1: Headless UIのメニューボタン（最も確実）
+    // 方法1: 「グループ」テキストを含むheadlessuiボタン（？ボタンではなく、FDグループボタン）
     try {
-      const menuButton = await page.$('button[id^="headlessui-menu-button"]');
-      if (menuButton) {
-        await menuButton.click();
-        await delay(1500);
-        console.log(`   📂 ドロップダウンを開きました（headlessui）`);
-        dropdownOpened = true;
+      const menuButtons = await page.$$('button[id^="headlessui-menu-button"]');
+      for (const btn of menuButtons) {
+        const text = await page.evaluate(el => el.textContent?.trim(), btn);
+        // 「グループ」を含むボタンを探す（？ヘルプボタンを除外）
+        if (text && text.includes('グループ')) {
+          await btn.click();
+          await delay(1500);
+          console.log(`   📂 ドロップダウンを開きました（${text}）`);
+          dropdownOpened = true;
+          break;
+        }
       }
     } catch (e) {
       // 方法2に進む
     }
     
-    // 方法2: ヘッダー内のボタン（プロフィール画像の横）
+    // 方法2: ヘッダー右側のアカウントボタン
     if (!dropdownOpened) {
       try {
-        const headerButtons = await page.$$('header button, nav button, .navbar button');
-        for (const btn of headerButtons) {
+        const allButtons = await page.$$('button');
+        for (const btn of allButtons) {
           const text = await page.evaluate(el => el.textContent?.trim(), btn);
-          if (text && (text.includes('グループ') || text.includes('expand'))) {
+          // 「グループ」「アカウント」などを含むボタン
+          if (text && (text.includes('グループ') || text.includes('アカウント')) && !text.includes('講座')) {
             await btn.click();
             await delay(1500);
-            console.log(`   📂 ドロップダウンを開きました（ヘッダーボタン）`);
-            dropdownOpened = true;
-            break;
-          }
-        }
-      } catch (e) {
-        // 方法3に進む
-      }
-    }
-    
-    // 方法3: expand_more アイコンを含むボタン
-    if (!dropdownOpened) {
-      try {
-        const expandButtons = await page.$$('button');
-        for (const btn of expandButtons) {
-          const hasExpand = await page.evaluate(el => el.innerHTML.includes('expand_more'), btn);
-          if (hasExpand) {
-            await btn.click();
-            await delay(1500);
-            console.log(`   📂 ドロップダウンを開きました（expand_more）`);
+            console.log(`   📂 ドロップダウンを開きました（${text}）`);
             dropdownOpened = true;
             break;
           }
