@@ -71,21 +71,15 @@ async function run() {
     console.log(`[${i + 1}/${clients.length}] ${client.name}`);
     console.log('------------------------------------------------------------');
     
-    // Cookieチェック
-    const cookies = client.cookies ? JSON.parse(client.cookies) : null;
-    
-    if (!cookies || cookies.length === 0) {
-      console.log('⚠️ Cookieが設定されていません。スキップします。');
-      results.push({ name: client.name, success: false, error: 'Cookie未設定' });
-      continue;
-    }
-    
     try {
       // プロファイルパス（profileが指定されていればそれを使用、なければ名前から生成）
       const profileName = client.profile 
         ? sanitizeClientName(client.profile)
         : sanitizeClientName(client.name);
       const userDataDir = path.join(__dirname, '../.browser-data', profileName);
+      
+      // ローカル実行では userDataDir のセッションを使う（Cookieは渡さない）
+      // 一度手動ログインすれば、次回からは自動ログイン
       
       // CSV エクスポート
       console.log('【フェーズ1】CSV ダウンロード');
@@ -96,7 +90,7 @@ async function run() {
         {
           ...options,
           userDataDir,
-          cookies,
+          // cookies は渡さない（userDataDirのセッションを優先）
           profile: client.profile || null,
           headless: false // ローカルではブラウザ表示
         }
