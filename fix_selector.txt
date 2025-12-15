@@ -1,0 +1,14 @@
+    console.log('📍 ステップ2: プリセット選択');
+    
+    // ページが完全に読み込まれるまで待機
+    await page.waitForTimeout(5000);
+    
+    // ページの状態を確認
+    const readyState = await page.evaluate(() => document.readyState);
+    console.log(`   ページ状態: ${readyState}`);
+    
+    if (readyState !== 'complete') {
+      await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 });
+    }
+    
+    await page.waitForSelector('select[name="preset"], select.preset-select', { timeout: 10000 });

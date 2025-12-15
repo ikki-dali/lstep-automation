@@ -53,14 +53,25 @@
             <!-- Credentials Tab -->
             <section id="credentials-tab" class="tab-content">
                 <div class="panel">
-                    <h2>Google認証情報</h2>
-                    <p class="info-text">Google Service AccountのJSONを貼り付けてください</p>
-                    <div id="credentials-status" class="credentials-status"></div>
-                    <div class="form-group">
-                        <label for="credentials-json">JSON</label>
-                        <textarea id="credentials-json" rows="12" placeholder='{"type": "service_account", ...}'></textarea>
+                    <h2>Google Sheets 連携設定</h2>
+                    <div class="info-text">
+                        <strong>📋 スプレッドシートの共有設定</strong><br><br>
+                        以下のメールアドレスに<strong>編集者権限</strong>を付与してください：
                     </div>
-                    <button id="save-credentials-btn" class="btn btn-primary">保存</button>
+                    <div class="service-account-email">
+                        <code id="service-email">fd-app@fd-app-478108.iam.gserviceaccount.com</code>
+                        <button id="copy-email-btn" class="btn btn-secondary" onclick="copyEmail()">コピー</button>
+                    </div>
+                    <div class="setup-steps">
+                        <h3>設定手順</h3>
+                        <ol>
+                            <li>Google スプレッドシートを開く</li>
+                            <li>右上の「共有」ボタンをクリック</li>
+                            <li>上記のメールアドレスを追加</li>
+                            <li>権限を「編集者」に設定</li>
+                            <li>「送信」をクリック</li>
+                        </ol>
+                    </div>
                 </div>
             </section>
 

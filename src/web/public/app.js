@@ -28,7 +28,6 @@ async function init() {
     await loadClients();
     await loadSetupStatus();
     await loadOptions();
-    await checkCredentials();
     
     startPolling();
 }
@@ -285,54 +284,22 @@ document.getElementById('save-options-btn').addEventListener('click', async () =
     }
 });
 
-// Credentials
-async function checkCredentials() {
-    try {
-        const res = await fetch('/api/credentials');
-        const data = await res.json();
-        
-        const statusEl = document.getElementById('credentials-status');
-        if (data.exists) {
-            statusEl.className = 'credentials-status success';
-            statusEl.textContent = '✓ 認証情報が設定されています';
-        } else {
-            statusEl.className = 'credentials-status warning';
-            statusEl.textContent = '認証情報が設定されていません';
-        }
-    } catch (e) {
-        console.error('Error checking credentials:', e);
-    }
+// Copy email function
+window.copyEmail = function() {
+    const email = document.getElementById('service-email').textContent;
+    navigator.clipboard.writeText(email).then(() => {
+        showMessage('メールアドレスをコピーしました', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = email;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showMessage('メールアドレスをコピーしました', 'success');
+    });
 }
-
-document.getElementById('save-credentials-btn').addEventListener('click', async () => {
-    const jsonText = document.getElementById('credentials-json').value.trim();
-    
-    if (!jsonText) {
-        showMessage('JSONを入力してください', 'error');
-        return;
-    }
-    
-    try {
-        const credentials = JSON.parse(jsonText);
-        
-        const res = await fetch('/api/credentials', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(credentials)
-        });
-        
-        if (res.ok) {
-            showMessage('認証情報を保存しました', 'success');
-            document.getElementById('credentials-json').value = '';
-            await checkCredentials();
-        } else {
-            const data = await res.json();
-            showMessage(data.error, 'error');
-        }
-    } catch (e) {
-        showMessage('無効なJSON形式です', 'error');
-    }
-});
 
 // Run automation
 runBtn.addEventListener('click', async () => {

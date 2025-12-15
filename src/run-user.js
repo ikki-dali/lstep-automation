@@ -41,19 +41,7 @@ async function run(userId) {
   
   console.log(`ユーザー: ${user.email}`);
   
-  // 認証情報取得
-  const credentials = db.getCredentials(userId);
-  if (!credentials) {
-    console.error('Google認証情報が設定されていません');
-    process.exit(1);
-  }
-  
-  // 認証情報を一時ファイルに書き出し
-  const tempCredPath = path.join(__dirname, `../config/credentials_${userId}.json`);
-  await fs.writeFile(tempCredPath, JSON.stringify(credentials));
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = tempCredPath;
-  
-  // Sheets API初期化
+  // Sheets API初期化（共通のcredentials.jsonを使用）
   await initializeSheetsClient();
   
   // クライアント取得
@@ -120,10 +108,6 @@ async function run(userId) {
     console.log('');
   }
   
-  // 一時ファイル削除
-  try {
-    await fs.unlink(tempCredPath);
-  } catch (e) {}
   
   // サマリー
   const successCount = results.filter(r => r.success).length;

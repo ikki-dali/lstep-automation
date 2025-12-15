@@ -324,24 +324,43 @@ main { padding: 24px 32px; }
     border-radius: 4px;
 }
 
-/* Credentials Status */
-.credentials-status {
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 16px;
+/* Credentials / Service Account */
+.service-account-email {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0d1117;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+}
+
+.service-account-email code {
+    flex: 1;
+    font-family: 'SF Mono', 'Monaco', monospace;
     font-size: 0.9rem;
-}
-
-.credentials-status.success {
-    background: rgba(78, 205, 196, 0.1);
-    border: 1px solid rgba(78, 205, 196, 0.3);
     color: #4ecdc4;
+    word-break: break-all;
 }
 
-.credentials-status.warning {
-    background: rgba(255, 193, 7, 0.1);
-    border: 1px solid rgba(255, 193, 7, 0.3);
-    color: #ffc107;
+.setup-steps {
+    margin-top: 24px;
+}
+
+.setup-steps h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: #fff;
+}
+
+.setup-steps ol {
+    padding-left: 20px;
+    color: rgba(255,255,255,0.8);
+    line-height: 2;
+}
+
+.setup-steps li {
+    margin-bottom: 4px;
 }
 
 /* Log Container - Terminal Style */

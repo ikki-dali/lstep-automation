@@ -1,0 +1,14 @@
+    if (currentUrl.includes('/friend') || currentUrl.includes('/line/show') || pageTitle.includes('友だち')) {
+      const exportPage = await navigateToExportPage(page, browser);
+      
+      // 古いページを閉じる前に、新しいページが有効か確認
+      await exportPage.waitForTimeout(1000);
+      
+      // 古いページを閉じる
+      await page.close();
+      page = exportPage;
+      
+      // 新しいページのURLとタイトルを確認
+      console.log(`   新しいページURL: ${page.url()}`);
+      console.log(`   新しいページタイトル: ${await page.title()}`);
+    }

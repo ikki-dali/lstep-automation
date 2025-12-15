@@ -1,0 +1,57 @@
+    console.log('📍 ステップ2: プリセット選択');
+    
+    // ページが完全に読み込まれるまで待機
+    await page.waitForTimeout(5000);
+    
+    // ページの状態を確認
+    const readyState = await page.evaluate(() => document.readyState);
+    console.log(`   ページ状態: ${readyState}`);
+    
+    if (readyState !== 'complete') {
+      await page.waitForFunction(() => document.readyState === 'complete', { timeout: 10000 });
+    }
+    
+    // プリセット名からボタンを探す
+    console.log(`   🔍 プリセット「${presetName}」を探しています...`);
+    
+    // デバッグ: ページ内のすべてのプリセット名を表示
+    const allPresets = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('tr'));
+      return rows.map(row => row.textContent.trim()).filter(text => text.length > 0);
+    });
+    
+    console.log('   📋 ページ内のプリセット一覧（最初の5件）:');
+    allPresets.slice(0, 5).forEach((text, i) => {
+      console.log(`      ${i + 1}: ${text.substring(0, 150)}`);
+    });
+    
+    const buttonFound = await page.evaluate((presetName) => {
+      const rows = Array.from(document.querySelectorAll('tr'));
+      
+      for (const row of rows) {
+        const text = row.textContent;
+        
+        if (text.includes(presetName)) {
+          const buttons = row.querySelectorAll('button, a');
+          
+          for (const button of buttons) {
+            if (button.textContent.includes('CSVエクスポート')) {
+              button.click();
+              return true;
+            }
+          }
+        }
+      }
+      
+      return false;
+    }, presetName);
+    
+    if (!buttonFound) {
+      throw new Error(`プリセット "${presetName}" が見つかりません`);
+    }
+    
+    console.log(`✅ プリセット「${presetName}」のエクスポートボタンをクリックしました`);
+    
+    await page.waitForTimeout(1000);
+
+    console.log('📍 ステップ3: エクスポート実行');

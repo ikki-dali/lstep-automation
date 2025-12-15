@@ -5,7 +5,18 @@
       "exporterUrl": "https://manager.linestep.net/line/exporter/8EXE9PNEJjeMUSrD/list",
       "presetName": "member_202509191045",
       "sheetId": "1V9ymBaNF4HkY7gz72F53HuGTbUCGd0ynZLct69XJY-o",
-      "sheetName": "Raw_Lステップ"
+      "sheetName": "Raw_Lステップ",
+      "email": "recruitdali",
+      "password": "recruitdali1!"
+    },
+    {
+      "name": "アドコン",
+      "exporterUrl": "https://manager.linestep.net/line/exporter/Rgr6J7dFYORNMXLI0/list",
+      "presetName": "[ADL]アドコン",
+      "sheetId": "1XOFnQK5v9VjdMxgjIwdB8EGQswB7yZp8mmAh4wytUOo",
+      "sheetName": "Raw_Lステップ",
+      "email": "adocon_forest",
+      "password": "adoadoforest66"
     }
   ],
   "options": {
@@ -13,8 +24,6 @@
     "retryCount": 3,
     "retryDelay": 5000,
     "headless": true,
-    "slowMo": 100,
-    "waitForNetworkIdle": true,
     "screenshotOnError": true,
     "stopOnError": false,
     "cleanupDownloads": true
@@ -23,5 +32,10 @@
     "level": "info",
     "maxFiles": 30,
     "maxSize": "10m"
+  },
+  "schedule": {
+    "enabled": true,
+    "hours": "*",
+    "minutes": "0"
   }
 }

@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log
+
+# Logs
+logs/*.log
+logs/*.png
+
+# Downloads (will be generated at runtime)
+downloads/*
+
+# Browser data (will be generated at runtime)
+.browser-data/*
+
+# Config (should be mounted as volume)
+config/credentials.json
+config/settings.json
+
+# Development
+.env
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+temp_*.txt
+fix_*.txt
+insert_*.txt
+test-*.js

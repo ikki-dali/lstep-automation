@@ -1,0 +1,11 @@
+    
+    // デバッグ: ページ内のすべてのプリセット名を表示
+    const allPresets = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('tr'));
+      return rows.map(row => row.textContent.trim()).filter(text => text.length > 0);
+    });
+    
+    console.log('   📋 ページ内のプリセット一覧（最初の5件）:');
+    allPresets.slice(0, 5).forEach((text, i) => {
+      console.log(`      ${i + 1}: ${text.substring(0, 150)}`);
+    });

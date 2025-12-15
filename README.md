@@ -71,6 +71,112 @@ npm run setup
 npm start
 ```
 
+## Docker で実行する（推奨）
+
+Dockerを使用すると、環境構築が不要で、ブラウザベースのUIから簡単に設定・実行できます。
+
+### 前提条件
+
+- Docker と Docker Compose がインストール済み
+  - [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+  - [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+
+### 起動手順
+
+1. **リポジトリをクローン**
+   ```bash
+   git clone https://github.com/ikki-dali/lstep-automation.git
+   cd lstep-automation
+   ```
+
+2. **Dockerコンテナを起動**
+   ```bash
+   docker-compose up -d
+   ```
+
+   初回は数分かかります（Chromeのインストール含む）。
+
+3. **Web UIにアクセス**
+
+   ブラウザで `http://localhost:8080` を開く
+
+4. **設定を行う**
+
+   - **認証情報タブ**: Google Service Accountの認証情報（JSONの内容）を貼り付けて保存
+   - **設定タブ**: クライアント情報を入力
+     - クライアント名: 任意の名前
+     - エクスポートURL: LステップのエクスポートページURL
+     - プリセット名: 使用するプリセット名（完全一致）
+     - Google Sheets ID: スプレッドシートID（URLの /d/ と /edit の間）
+     - シート名: シート名（例: シート1）
+   - **設定を保存**ボタンをクリック
+
+5. **初回ログイン**
+
+   初回実行時は、コンテナ内でブラウザを開く必要があるため、以下のコマンドで手動ログインを行います：
+   ```bash
+   docker-compose exec lstep-automation-web node src/setup.js
+   ```
+
+   ログインが完了したら、次回からは「実行」ボタンで自動実行できます。
+
+6. **実行する**
+
+   Web UI上部の「実行」ボタンをクリックして自動化を実行
+
+7. **ログを確認**
+
+   「ログ」タブでリアルタイムに実行状況を確認可能
+
+### Docker コマンド
+
+```bash
+# コンテナを起動
+docker-compose up -d
+
+# ログを確認
+docker-compose logs -f
+
+# コンテナを停止
+docker-compose down
+
+# コンテナを再起動
+docker-compose restart
+
+# コンテナ内でコマンドを実行（デバッグ用）
+docker-compose exec lstep-automation-web bash
+```
+
+### データの永続化
+
+以下のデータはホスト側に保存され、コンテナを削除しても保持されます：
+
+- `config/` - 設定ファイル（settings.json, credentials.json）
+- `logs/` - 実行ログとスクリーンショット
+- `downloads/` - ダウンロードしたCSV
+- Dockerボリューム `browser-data` - ログインセッション
+
+### トラブルシューティング（Docker）
+
+**Web UIにアクセスできない**
+```bash
+docker-compose ps  # コンテナの状態を確認
+docker-compose logs  # ログを確認
+```
+
+**ログインセッションが保存されない**
+- Dockerボリュームが正しくマウントされているか確認
+- `docker volume ls` でボリュームを確認
+
+**ポート3000が使用中**
+- `docker-compose.yml` のポート設定を変更（例: `"8080:3000"`）
+
+---
+
+## ローカル環境で実行する（従来の方法）
+
+Dockerを使わずに、直接Node.jsで実行することもできます。
+
 ## 自動実行設定（Cron）
 
 2時間おきに自動実行する場合:
