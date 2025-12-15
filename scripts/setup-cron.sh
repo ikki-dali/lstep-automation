@@ -9,7 +9,6 @@ PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_NAME}.plist"
 # nodeのパスを検出
 NODE_PATH=$(which node)
 if [ -z "$NODE_PATH" ]; then
-  # Homebrewでインストールされている場合
   if [ -f "/opt/homebrew/bin/node" ]; then
     NODE_PATH="/opt/homebrew/bin/node"
   elif [ -f "/usr/local/bin/node" ]; then
@@ -25,13 +24,13 @@ echo "LSTEP 自動化 - cron設定"
 echo "============================================"
 echo ""
 
-# 実行時間を引数から取得（デフォルト: 9:00）
-HOUR="${1:-9}"
-MINUTE="${2:-0}"
+# 実行間隔を引数から取得（デフォルト: 5時間）
+INTERVAL_HOURS="${1:-5}"
+INTERVAL_SECONDS=$((INTERVAL_HOURS * 60 * 60))
 
 echo "📁 プロジェクトパス: $PROJECT_DIR"
 echo "🔧 Node.js: $NODE_PATH"
-echo "⏰ 実行時間: 毎日 ${HOUR}:${MINUTE}"
+echo "⏰ 実行間隔: ${INTERVAL_HOURS}時間ごと"
 echo ""
 
 # 既存のジョブがあれば停止
@@ -39,6 +38,9 @@ if launchctl list | grep -q "$PLIST_NAME"; then
   echo "🔄 既存のスケジュールを停止中..."
   launchctl unload "$PLIST_PATH" 2>/dev/null
 fi
+
+# logsディレクトリを作成
+mkdir -p "$PROJECT_DIR/logs"
 
 # plistファイルを作成
 cat > "$PLIST_PATH" << EOF
@@ -58,13 +60,8 @@ cat > "$PLIST_PATH" << EOF
     <key>WorkingDirectory</key>
     <string>${PROJECT_DIR}</string>
     
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>${HOUR}</integer>
-        <key>Minute</key>
-        <integer>${MINUTE}</integer>
-    </dict>
+    <key>StartInterval</key>
+    <integer>${INTERVAL_SECONDS}</integer>
     
     <key>StandardOutPath</key>
     <string>${PROJECT_DIR}/logs/cron.log</string>
@@ -86,15 +83,12 @@ cat > "$PLIST_PATH" << EOF
     <string>Interactive</string>
     
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
 EOF
 
 echo "✅ plistファイルを作成しました: $PLIST_PATH"
-
-# logsディレクトリを作成
-mkdir -p "$PROJECT_DIR/logs"
 
 # plistを読み込む
 launchctl load "$PLIST_PATH"
@@ -105,18 +99,17 @@ echo "============================================"
 echo "設定完了"
 echo "============================================"
 echo ""
-echo "📌 使い方:"
-echo "  - 毎日 ${HOUR}:${MINUTE} に自動実行されます"
+echo "📌 動作:"
+echo "  - ${INTERVAL_HOURS}時間ごとに自動実行"
+echo "  - 設定直後にも1回実行されます"
 echo "  - ログイン必要時のみブラウザが表示されます"
 echo ""
 echo "📌 コマンド:"
 echo "  手動実行: npm run local"
-echo "  停止:     launchctl unload $PLIST_PATH"
-echo "  再開:     launchctl load $PLIST_PATH"
-echo "  確認:     launchctl list | grep lstep"
-echo "  今すぐ実行: launchctl start $PLIST_NAME"
+echo "  停止:     npm run cron:stop"
+echo "  確認:     npm run cron:status"
+echo "  今すぐ:   npm run cron:run"
 echo ""
 echo "📌 ログ確認:"
-echo "  tail -f $PROJECT_DIR/logs/cron.log"
+echo "  npm run logs:watch"
 echo ""
-
