@@ -73,7 +73,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'メールアドレスとパスワードは必須です' });
     }
     
-    const user = db.createUser(email, password, name);
+    const user = await db.createUser(email, password, name);
     req.session.userId = user.id;
     
     res.json({ success: true, user: { email: user.email, name: user.name } });
@@ -83,16 +83,20 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // POST /api/auth/login - ログイン
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  const user = db.authenticateUser(email, password);
-  if (!user) {
-    return res.status(401).json({ error: 'メールアドレスまたはパスワードが違います' });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const user = await db.authenticateUser(email, password);
+    if (!user) {
+      return res.status(401).json({ error: 'メールアドレスまたはパスワードが違います' });
+    }
+    
+    req.session.userId = user.id;
+    res.json({ success: true, user: { email: user.email, name: user.name } });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  
-  req.session.userId = user.id;
-  res.json({ success: true, user: { email: user.email, name: user.name } });
 });
 
 // POST /api/auth/logout - ログアウト
@@ -102,12 +106,12 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // GET /api/auth/me - 現在のユーザー
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   if (!req.session.userId) {
     return res.json({ user: null });
   }
   
-  const user = db.getUserById(req.session.userId);
+  const user = await db.getUserById(req.session.userId);
   res.json({ user: user ? { email: user.email, name: user.name } : null });
 });
 
@@ -116,29 +120,31 @@ app.get('/api/auth/me', (req, res) => {
 // ============================================================
 
 // GET /api/clients - クライアント一覧
-app.get('/api/clients', requireAuth, (req, res) => {
-  const clients = db.getClientsByUser(req.session.userId);
-  
-  // DBの形式をフロントエンド用に変換
-  const formatted = clients.map(c => ({
-    id: c.id,
-    name: c.name,
-    exporterUrl: c.exporter_url,
-    presetName: c.preset_name,
-    sheetId: c.sheet_id,
-    sheetName: c.sheet_name,
-    email: c.email,
-    password: c.password,
-    isSetup: !!c.is_setup
-  }));
-  
-  res.json({ clients: formatted });
+app.get('/api/clients', requireAuth, async (req, res) => {
+  try {
+    const clients = await db.getClientsByUser(req.session.userId);
+    
+    // DBの形式をフロントエンド用に変換
+    const formatted = clients.map(c => ({
+      id: c.id,
+      name: c.name,
+      exporterUrl: c.exporter_url,
+      presetName: c.preset_name,
+      sheetId: c.sheet_id,
+      sheetName: c.sheet_name,
+      isSetup: !!c.is_setup
+    }));
+    
+    res.json({ clients: formatted });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/clients - クライアント追加
-app.post('/api/clients', requireAuth, (req, res) => {
+app.post('/api/clients', requireAuth, async (req, res) => {
   try {
-    const client = db.createClient(req.session.userId, req.body);
+    const client = await db.createClient(req.session.userId, req.body);
     res.json({ success: true, client });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -146,9 +152,9 @@ app.post('/api/clients', requireAuth, (req, res) => {
 });
 
 // PUT /api/clients/:id - クライアント更新
-app.put('/api/clients/:id', requireAuth, (req, res) => {
+app.put('/api/clients/:id', requireAuth, async (req, res) => {
   try {
-    db.updateClient(req.params.id, req.session.userId, req.body);
+    await db.updateClient(req.params.id, req.session.userId, req.body);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -156,9 +162,9 @@ app.put('/api/clients/:id', requireAuth, (req, res) => {
 });
 
 // DELETE /api/clients/:id - クライアント削除
-app.delete('/api/clients/:id', requireAuth, (req, res) => {
+app.delete('/api/clients/:id', requireAuth, async (req, res) => {
   try {
-    db.deleteClient(req.params.id, req.session.userId);
+    await db.deleteClient(req.params.id, req.session.userId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -170,15 +176,19 @@ app.delete('/api/clients/:id', requireAuth, (req, res) => {
 // ============================================================
 
 // GET /api/options - オプション取得
-app.get('/api/options', requireAuth, (req, res) => {
-  const options = db.getOptions(req.session.userId);
-  res.json(options);
+app.get('/api/options', requireAuth, async (req, res) => {
+  try {
+    const options = await db.getOptions(req.session.userId);
+    res.json(options);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/options - オプション保存
-app.post('/api/options', requireAuth, (req, res) => {
+app.post('/api/options', requireAuth, async (req, res) => {
   try {
-    db.saveOptions(req.session.userId, req.body);
+    await db.saveOptions(req.session.userId, req.body);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -190,19 +200,23 @@ app.post('/api/options', requireAuth, (req, res) => {
 // ============================================================
 
 // GET /api/credentials - 認証情報確認
-app.get('/api/credentials', requireAuth, (req, res) => {
-  const credentials = db.getCredentials(req.session.userId);
-  res.json({ exists: !!credentials });
+app.get('/api/credentials', requireAuth, async (req, res) => {
+  try {
+    const credentials = await db.getCredentials(req.session.userId);
+    res.json({ exists: !!credentials });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/credentials - 認証情報保存
-app.post('/api/credentials', requireAuth, (req, res) => {
+app.post('/api/credentials', requireAuth, async (req, res) => {
   try {
     if (!req.body.type || !req.body.project_id || !req.body.private_key) {
       return res.status(400).json({ error: '無効な認証情報です' });
     }
     
-    db.saveCredentials(req.session.userId, req.body);
+    await db.saveCredentials(req.session.userId, req.body);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -214,7 +228,7 @@ app.post('/api/credentials', requireAuth, (req, res) => {
 // ============================================================
 
 // POST /api/clients/:id/cookies - Cookie保存
-app.post('/api/clients/:id/cookies', requireAuth, (req, res) => {
+app.post('/api/clients/:id/cookies', requireAuth, async (req, res) => {
   try {
     const { cookies } = req.body;
     
@@ -222,7 +236,7 @@ app.post('/api/clients/:id/cookies', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'Cookieデータが無効です' });
     }
     
-    db.setClientCookies(req.params.id, req.session.userId, cookies);
+    await db.setClientCookies(req.params.id, req.session.userId, cookies);
     res.json({ success: true, message: 'Cookieを保存しました' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -230,9 +244,13 @@ app.post('/api/clients/:id/cookies', requireAuth, (req, res) => {
 });
 
 // GET /api/clients/:id/cookies - Cookie確認
-app.get('/api/clients/:id/cookies', requireAuth, (req, res) => {
-  const cookies = db.getClientCookies(req.params.id, req.session.userId);
-  res.json({ hasCookies: !!cookies && cookies.length > 0 });
+app.get('/api/clients/:id/cookies', requireAuth, async (req, res) => {
+  try {
+    const cookies = await db.getClientCookies(req.params.id, req.session.userId);
+    res.json({ hasCookies: !!cookies && cookies.length > 0 });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ============================================================
@@ -240,18 +258,22 @@ app.get('/api/clients/:id/cookies', requireAuth, (req, res) => {
 // ============================================================
 
 // GET /api/setup/status - セットアップ状態
-app.get('/api/setup/status', requireAuth, (req, res) => {
-  const clients = db.getClientsByUser(req.session.userId);
-  
-  const statuses = clients.map(c => ({
-    id: c.id,
-    name: c.name,
-    isSetup: !!c.is_setup,
-    hasCookies: !!c.cookies,
-    isRunning: setupProcesses.has(c.id)
-  }));
-  
-  res.json({ statuses });
+app.get('/api/setup/status', requireAuth, async (req, res) => {
+  try {
+    const clients = await db.getClientsByUser(req.session.userId);
+    
+    const statuses = clients.map(c => ({
+      id: c.id,
+      name: c.name,
+      isSetup: !!c.is_setup,
+      hasCookies: !!c.cookies,
+      isRunning: setupProcesses.has(c.id)
+    }));
+    
+    res.json({ statuses });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/setup/:clientId - セットアップ開始

@@ -33,7 +33,7 @@ async function run(userId) {
   db.initDB();
   
   // ユーザー確認
-  const user = db.getUserById(userId);
+  const user = await db.getUserById(userId);
   if (!user) {
     console.error('ユーザーが見つかりません');
     process.exit(1);
@@ -45,8 +45,8 @@ async function run(userId) {
   await initializeSheetsClient();
   
   // クライアント取得
-  const clients = db.getClientsByUser(userId);
-  const options = db.getOptions(userId);
+  const clients = await db.getClientsByUser(userId);
+  const options = await db.getOptions(userId);
   
   console.log(`クライアント数: ${clients.length}`);
   console.log('');
