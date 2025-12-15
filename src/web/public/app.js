@@ -351,6 +351,8 @@ runBtn.addEventListener('click', async () => {
 });
 
 // Status polling
+let allLogs = [];
+
 function startPolling() {
     setInterval(async () => {
         try {
@@ -361,26 +363,50 @@ function startPolling() {
                 statusText.textContent = '実行中...';
                 statusText.className = 'status-running';
                 runBtn.disabled = true;
-                
-                // Update logs
-                if (data.logs.length > 0) {
-                    const logsContent = document.getElementById('logs-content');
-                    logsContent.textContent = data.logs.map(l => `[${l.time}] ${l.message}`).join('\n');
-                }
             } else {
                 statusText.textContent = '待機中';
                 statusText.className = 'status-idle';
                 runBtn.disabled = false;
             }
+            
+            // Update logs
+            if (data.logs && data.logs.length > 0) {
+                allLogs = data.logs;
+                updateLogsUI();
+            }
         } catch (e) {}
         
         await loadSetupStatus();
-    }, 5000);
+    }, 2000); // 2秒ごと
+}
+
+function updateLogsUI() {
+    const logsContent = document.getElementById('logs-content');
+    if (allLogs.length === 0) {
+        logsContent.innerHTML = '<span class="log-empty">ログはありません</span>';
+        return;
+    }
+    
+    const html = allLogs.map(l => {
+        const time = new Date(l.time).toLocaleTimeString('ja-JP');
+        const levelClass = l.level === 'error' ? 'log-error' : 'log-info';
+        return `<div class="log-line ${levelClass}"><span class="log-time">${time}</span> ${escapeHtml(l.message)}</div>`;
+    }).join('');
+    
+    logsContent.innerHTML = html;
+    logsContent.scrollTop = logsContent.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Clear logs
 document.getElementById('clear-logs-btn').addEventListener('click', () => {
-    document.getElementById('logs-content').textContent = 'ログはありません';
+    allLogs = [];
+    updateLogsUI();
 });
 
 // Show message
