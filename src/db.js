@@ -38,6 +38,7 @@ export function initDB() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id),
       name TEXT NOT NULL,
+      profile TEXT,
       exporter_url TEXT,
       preset_name TEXT,
       sheet_id TEXT,
@@ -48,6 +49,14 @@ export function initDB() {
       is_setup INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    
+    -- profileカラムがない場合は追加
+    DO $$ 
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'clients' AND column_name = 'profile') THEN
+        ALTER TABLE clients ADD COLUMN profile TEXT;
+      END IF;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS credentials (
       user_id TEXT PRIMARY KEY REFERENCES users(id),
@@ -133,9 +142,9 @@ export async function getClientById(clientId, userId) {
 export async function createClient(userId, data) {
   const id = uuidv4();
   await pool.query(
-    `INSERT INTO clients (id, user_id, name, exporter_url, preset_name, sheet_id, sheet_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, userId, data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName]
+    `INSERT INTO clients (id, user_id, name, profile, exporter_url, preset_name, sheet_id, sheet_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [id, userId, data.name, data.profile || '', data.exporterUrl, data.presetName, data.sheetId, data.sheetName]
   );
   
   return { id, ...data };
@@ -143,9 +152,9 @@ export async function createClient(userId, data) {
 
 export async function updateClient(clientId, userId, data) {
   await pool.query(
-    `UPDATE clients SET name = $1, exporter_url = $2, preset_name = $3, sheet_id = $4, sheet_name = $5
-     WHERE id = $6 AND user_id = $7`,
-    [data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName, clientId, userId]
+    `UPDATE clients SET name = $1, profile = $2, exporter_url = $3, preset_name = $4, sheet_id = $5, sheet_name = $6
+     WHERE id = $7 AND user_id = $8`,
+    [data.name, data.profile || '', data.exporterUrl, data.presetName, data.sheetId, data.sheetName, clientId, userId]
   );
 }
 

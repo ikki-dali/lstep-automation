@@ -268,6 +268,132 @@ async function waitForLogin(page, email = null, password = null) {
   return true;
 }
 
+// LINE公式アカウントを切り替える
+async function switchLineAccount(page, targetAccountName) {
+  console.log(`🔄 LINE公式アカウントを切り替え中: ${targetAccountName}`);
+  
+  try {
+    // ヘッダー右端のアカウントドロップダウンをクリック
+    // 「FDグループ」などのアカウント名が表示されているボタン
+    let dropdownOpened = false;
+    
+    // 方法1: text/セレクターで「グループ」を含む要素をクリック
+    try {
+      await page.click('text/グループ');
+      await delay(2000);
+      console.log(`   📂 ドロップダウンを開きました`);
+      dropdownOpened = true;
+    } catch (e) {
+      // 方法2に進む
+    }
+    
+    // 方法2: ページ内で「グループ」を含む短いテキストの要素を探す
+    if (!dropdownOpened) {
+      const allElements = await page.$$('button, a, div, span, li');
+      for (const el of allElements) {
+        try {
+          const text = await page.evaluate(el => el.textContent?.trim(), el);
+          const isVisible = await page.evaluate(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          }, el);
+          
+          if (text && text.includes('グループ') && text.length < 20 && isVisible) {
+            console.log(`   🔍 「${text}」をクリック`);
+            await el.click();
+            await delay(2000);
+            console.log(`   📂 ドロップダウンを開きました`);
+            dropdownOpened = true;
+            break;
+          }
+        } catch (e) {
+          // 次の要素へ
+        }
+      }
+    }
+    
+    // 「○○に切り替え」メニューを探す（部分一致・類似検索）
+    // 正規化: ハイフン、スペース、全角半角を統一して比較
+    const normalize = (str) => {
+      return str
+        .replace(/[-－ー]/g, '')  // ハイフン削除
+        .replace(/\s+/g, '')      // スペース削除
+        .replace(/　/g, '')       // 全角スペース削除
+        .toLowerCase();
+    };
+    
+    const targetNormalized = normalize(targetAccountName);
+    
+    // メニュー項目を取得（表示されている要素のみ）
+    const menuItems = await page.$$('a, button, [role="menuitem"], .dropdown-item, li, div[class*="menu"] a, ul a');
+    
+    // デバッグ: 見つかった切り替えメニューを表示
+    const switchMenus = [];
+    for (const item of menuItems) {
+      const text = await page.evaluate(el => el.textContent?.trim(), item);
+      if (text && text.includes('切り替え')) {
+        switchMenus.push(text);
+      }
+    }
+    if (switchMenus.length > 0) {
+      console.log(`   📋 見つかった切り替えメニュー: ${switchMenus.slice(0, 5).join(', ')}`);
+    } else {
+      console.log(`   ⚠️ 切り替えメニューが見つかりません`);
+    }
+    
+    let bestMatch = null;
+    let bestMatchText = '';
+    
+    for (const item of menuItems) {
+      const text = await page.evaluate(el => el.textContent?.trim(), item);
+      if (!text || !text.includes('切り替え')) continue;
+      
+      const textNormalized = normalize(text);
+      
+      // 正規化した文字列で部分一致を確認
+      if (textNormalized.includes(targetNormalized) || targetNormalized.includes(textNormalized.replace('に切り替え', '').replace('にきりかえ', ''))) {
+        bestMatch = item;
+        bestMatchText = text;
+        break;
+      }
+      
+      // 部分的に一致する文字が多いものを選ぶ
+      const menuAccountName = text.replace('に切り替え', '').trim();
+      const menuNormalized = normalize(menuAccountName);
+      
+      // 3文字以上一致すれば候補として記録
+      let matchCount = 0;
+      for (let i = 0; i < Math.min(targetNormalized.length, menuNormalized.length); i++) {
+        if (targetNormalized[i] === menuNormalized[i]) matchCount++;
+      }
+      
+      if (matchCount >= 3 && !bestMatch) {
+        bestMatch = item;
+        bestMatchText = text;
+      }
+    }
+    
+    if (bestMatch) {
+      console.log(`   ✅ 「${bestMatchText}」をクリック`);
+      await bestMatch.click();
+      await delay(3000);
+      
+      // ページ遷移を待つ
+      await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
+      
+      console.log(`   ✅ アカウント切り替え完了`);
+      return true;
+    }
+    
+    console.log(`   ⚠️ 切り替えメニューが見つかりません（現在のアカウントで続行）`);
+    return false;
+    
+  } catch (error) {
+    console.log(`   ⚠️ アカウント切り替えに失敗: ${error.message}`);
+    return false;
+  }
+}
+
 async function navigateToExportPage(page, browser) {
   console.log('�� 友達リストからエクスポートページへ移動中...');
   
@@ -305,16 +431,19 @@ export async function exportCSV(exporterUrl, presetName, clientName, options = {
     email = null,
     password = null,
     cookies = null,
+    profile = null,
   } = options;
 
-  const browserDataDir = getBrowserDataDir(clientName);
+  // プロファイル名: 指定があればそれを使用、なければクライアント名から生成
+  const profileName = profile ? sanitizeClientName(profile) : sanitizeClientName(clientName);
+  const browserDataDir = path.join(process.cwd(), '.browser-data', profileName);
   await ensureDirectories(browserDataDir);
 
   console.log('========================================');
   console.log('📋 Lステップ CSV エクスポート開始');
   console.log('========================================');
   console.log(`クライアント: ${clientName}`);
-  console.log(`プロファイル: ${sanitizeClientName(clientName)}`);
+  console.log(`プロファイル: ${profileName}`);
   console.log(`プリセット: ${presetName}`);
   console.log(`URL: ${exporterUrl}`);
 
@@ -453,16 +582,49 @@ export async function exportCSV(exporterUrl, presetName, clientName, options = {
     let currentUrl = page.url();
     console.log(`   現在のURL: ${currentUrl}`);
 
+    // ログイン後に友達リストに飛んだ場合
     if (currentUrl.includes('/friend') || currentUrl.includes('/line/show') || currentPageTitle.includes('友だち')) {
-      const exportPage = await navigateToExportPage(page, browser);
-
+      
+      // まずLINE公式アカウントを切り替える
+      await switchLineAccount(page, clientName);
       await delay(2000);
-
-      console.log(`   新しいページURL: ${exportPage.url()}`);
-      const newTitle = await exportPage.title();
-      console.log(`   新しいページタイトル: ${newTitle}`);
-
-      page = exportPage;
+      
+      // エクスポートページに直接移動
+      console.log('📍 エクスポートページに直接移動中...');
+      console.log(`   → ${exporterUrl}`);
+      
+      await page.goto(exporterUrl, {
+        waitUntil: 'networkidle0',
+        timeout: timeout,
+      });
+      
+      await delay(3000);
+      
+      // ページ遷移を待つ
+      try {
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 5000 }).catch(() => {});
+      } catch (e) {
+        // タイムアウトは無視
+      }
+      
+      currentUrl = page.url();
+      console.log(`   移動後のURL: ${currentUrl}`);
+      
+      let newTitle = '';
+      try {
+        newTitle = await page.title();
+        console.log(`   移動後のページタイトル: ${newTitle}`);
+      } catch (e) {
+        console.log(`   ⚠️ ページタイトル取得をスキップ`);
+      }
+      
+      // まだエクスポートページに到達していない場合は従来の方法で移動
+      if (!currentUrl.includes('/exporter/')) {
+        console.log('   ⚠️ エクスポートページに到達できませんでした。従来の方法で移動します...');
+        const exportPage = await navigateToExportPage(page, browser);
+        await delay(2000);
+        page = exportPage;
+      }
     }
 
     if (headless) {

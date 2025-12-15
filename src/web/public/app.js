@@ -77,6 +77,7 @@ function addClientCard(client = null) {
         cardEl.dataset.id = client.id;
         card.querySelector('.client-name-display').textContent = client.name || '新規クライアント';
         card.querySelector('.client-name').value = client.name || '';
+        card.querySelector('.client-profile').value = client.profile || '';
         card.querySelector('.client-url').value = client.exporterUrl || '';
         card.querySelector('.client-preset').value = client.presetName || '';
         card.querySelector('.client-sheet-id').value = client.sheetId || '';
@@ -116,6 +117,7 @@ async function saveClient(cardEl) {
     const id = cardEl.dataset.id;
     const data = {
         name: cardEl.querySelector('.client-name').value,
+        profile: cardEl.querySelector('.client-profile').value,
         exporterUrl: cardEl.querySelector('.client-url').value,
         presetName: cardEl.querySelector('.client-preset').value,
         sheetId: cardEl.querySelector('.client-sheet-id').value,
