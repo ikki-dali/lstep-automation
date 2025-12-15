@@ -17,6 +17,29 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * ブラウザのロックファイルをクリーンアップ
+ */
+async function cleanupBrowserLocks(browserDataDir) {
+  const lockFiles = [
+    'SingletonLock',
+    'SingletonSocket',
+    'SingletonCookie',
+    'DevToolsActivePort'
+  ];
+
+  for (const lockFile of lockFiles) {
+    const lockPath = path.join(browserDataDir, lockFile);
+    try {
+      await fs.unlink(lockPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.log(`   ⚠️  Warning: Could not remove ${lockFile}: ${error.message}`);
+      }
+    }
+  }
+}
+
+/**
  * ブラウザインスタンスとページを管理するクラス
  */
 export class BrowserAutomation {
@@ -34,57 +57,77 @@ export class BrowserAutomation {
 
   /**
    * ブラウザを起動
-   * 
+   *
    * Cookie保存ディレクトリを使うことで、
    * ログイン状態を保持できる
    */
   async launch() {
     console.log('🚀 ブラウザ起動中...');
 
-    try {
-      this.browser = await puppeteer.launch({
-        headless: this.options.headless,
-        slowMo: this.options.slowMo,
-        
-        // システムのChromeを使用（より安定）
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-          (process.platform === 'darwin' 
-            ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-            : undefined),
-        
-        // Cookie保存用のディレクトリ
-        userDataDir: this.options.userDataDir,
-        
-        // ブラウザ引数
-        args: [
-          '--no-sandbox',                    // Linuxサーバー対応
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',         // メモリ不足対策
-          '--disable-blink-features=AutomationControlled', // 自動化検知回避
-        ],
-        
-        // デフォルトのタイムアウト設定
-        defaultViewport: {
-          width: 1920,
-          height: 1080,
+    // ロックファイルをクリーンアップ
+    await cleanupBrowserLocks(this.options.userDataDir);
+
+    const launchOptions = {
+      headless: this.options.headless,
+      slowMo: this.options.slowMo,
+
+      // Chromeの実行パス（環境変数で指定可能、未指定時はPuppeteerのbundled Chromiumを使用）
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+
+      // Cookie保存用のディレクトリ
+      userDataDir: this.options.userDataDir,
+
+      // ブラウザ引数
+      args: [
+        '--no-sandbox',                    // Linuxサーバー対応
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',         // メモリ不足対策
+        '--disable-blink-features=AutomationControlled', // 自動化検知回避
+      ],
+
+      // デフォルトのタイムアウト設定
+      defaultViewport: {
+        width: 1920,
+        height: 1080,
+      }
+    };
+
+    // リトライロジック
+    let lastError;
+    const maxRetries = 2;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          console.log(`   試行 ${attempt}/${maxRetries}: ブラウザを起動中...`);
+          await cleanupBrowserLocks(this.options.userDataDir);
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
-      });
 
-      this.page = await this.browser.newPage();
-      
-      // デフォルトタイムアウトを設定
-      this.page.setDefaultTimeout(this.options.timeout);
-      
-      // User-Agentを設定（通常のブラウザに見せる）
-      await this.page.setUserAgent(
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      );
+        this.browser = await puppeteer.launch(launchOptions);
+        console.log('   ✅ ブラウザ起動成功');
+        break;
+      } catch (error) {
+        lastError = error;
+        console.log(`   ❌ 試行 ${attempt}/${maxRetries} 失敗: ${error.message}`);
 
-      console.log('✅ ブラウザ起動完了');
-      
-    } catch (error) {
-      throw new Error(`ブラウザ起動エラー: ${error.message}`);
+        if (attempt === maxRetries) {
+          throw new Error(`ブラウザの起動に失敗しました (${maxRetries}回試行): ${error.message}`);
+        }
+      }
     }
+
+    this.page = await this.browser.newPage();
+
+    // デフォルトタイムアウトを設定
+    this.page.setDefaultTimeout(this.options.timeout);
+
+    // User-Agentを設定（通常のブラウザに見せる）
+    await this.page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+
+    console.log('✅ ブラウザ起動完了');
   }
 
   /**

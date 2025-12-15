@@ -28,8 +28,15 @@ async function processClient(client, options) {
     try {
       console.log('【フェーズ1】CSV ダウンロード');
       console.log('────────────────────────────────────────────────────────────');
-      
-      const csvPath = await exportCSV(client.exporterUrl, client.presetName, options);
+
+      // クライアント固有のemail/passwordをoptionsに追加
+      const clientOptions = {
+        ...options,
+        email: client.email,
+        password: client.password,
+      };
+
+      const csvPath = await exportCSV(client.exporterUrl, client.presetName, client.name, clientOptions);
 
       console.log('【フェーズ2】CSV データ解析');
       console.log('────────────────────────────────────────────────────────────');
@@ -77,13 +84,16 @@ async function processClient(client, options) {
 
 async function main() {
   const startTime = Date.now();
-  
+  const startDate = new Date();
+
   console.log('');
   console.log('╔════════════════════════════════════════════════════════════╗');
   console.log('║                                                            ║');
   console.log('║        LSTEP CSV 自動エクスポート & アップロードツール        ║');
   console.log('║                                                            ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
+  console.log(`🕐 開始時刻: ${startDate.toLocaleString('ja-JP')}`);
   console.log('');
 
   try {
@@ -107,11 +117,13 @@ async function main() {
 
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
+    const endDate = new Date();
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║                      実行結果サマリー                        ║');
     console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log(`🕐 完了時刻: ${endDate.toLocaleString('ja-JP')}`);
     console.log(`✅ 成功: ${successCount}件`);
     console.log(`❌ 失敗: ${failureCount}件`);
     console.log(`⏱️  実行時間: ${duration}秒`);
@@ -123,15 +135,18 @@ async function main() {
     }
 
   } catch (error) {
+    const errorDate = new Date();
+
     console.error('');
     console.error('╔════════════════════════════════════════════════════════════╗');
     console.error('║                      致命的なエラー                          ║');
     console.error('╚════════════════════════════════════════════════════════════╝');
+    console.error(`🕐 発生時刻: ${errorDate.toLocaleString('ja-JP')}`);
     console.error(`エラー: ${error.message}`);
     console.error('スタックトレース:');
     console.error(error.stack);
     console.error('');
-    
+
     process.exit(1);
   }
 }

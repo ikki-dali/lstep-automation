@@ -1,0 +1,28 @@
+services:
+  lstep-automation:
+    build: .
+    container_name: lstep-automation-web
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist browser data (login sessions)
+      - browser-data:/app/.browser-data
+      # Persist configuration
+      - ./config:/app/config
+      # Persist logs
+      - ./logs:/app/logs
+      # Temporary downloads
+      - ./downloads:/app/downloads
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - TZ=Asia/Tokyo
+    restart: unless-stopped
+    # Required for Chrome/Puppeteer to run
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+
+volumes:
+  browser-data:

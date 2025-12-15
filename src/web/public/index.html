@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSTEP自動化</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>LSTEP自動化</h1>
+                <p class="subtitle">CSV → Google Sheets</p>
+            </div>
+            <div class="header-right">
+                <span id="user-name"></span>
+                <button id="logout-btn" class="btn btn-secondary">ログアウト</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Status Panel -->
+            <section class="panel status-panel">
+                <div id="status">
+                    <div class="status-item">
+                        <span class="label">ステータス</span>
+                        <span id="status-text" class="status-idle">待機中</span>
+                    </div>
+                    <button id="run-btn" class="btn btn-primary">実行</button>
+                </div>
+            </section>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="clients">クライアント</button>
+                <button class="tab-btn" data-tab="credentials">認証情報</button>
+                <button class="tab-btn" data-tab="options">オプション</button>
+                <button class="tab-btn" data-tab="logs">ログ</button>
+            </div>
+
+            <!-- Clients Tab -->
+            <section id="clients-tab" class="tab-content active">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>クライアント</h2>
+                        <button id="add-client-btn" class="btn btn-secondary">+ 追加</button>
+                    </div>
+                    <div id="clients-container"></div>
+                </div>
+            </section>
+
+            <!-- Credentials Tab -->
+            <section id="credentials-tab" class="tab-content">
+                <div class="panel">
+                    <h2>Google認証情報</h2>
+                    <p class="info-text">Google Service AccountのJSONを貼り付けてください</p>
+                    <div id="credentials-status" class="credentials-status"></div>
+                    <div class="form-group">
+                        <label for="credentials-json">JSON</label>
+                        <textarea id="credentials-json" rows="12" placeholder='{"type": "service_account", ...}'></textarea>
+                    </div>
+                    <button id="save-credentials-btn" class="btn btn-primary">保存</button>
+                </div>
+            </section>
+
+            <!-- Options Tab -->
+            <section id="options-tab" class="tab-content">
+                <div class="panel">
+                    <h2>オプション</h2>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>タイムアウト (ms)</label>
+                            <input type="number" id="timeout" value="60000">
+                        </div>
+                        <div class="form-group">
+                            <label>リトライ回数</label>
+                            <input type="number" id="retryCount" value="3">
+                        </div>
+                        <div class="form-group">
+                            <label>リトライ間隔 (ms)</label>
+                            <input type="number" id="retryDelay" value="5000">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="headless" checked> ヘッドレスモード</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="screenshotOnError" checked> エラー時スクリーンショット</label>
+                    </div>
+                    <div class="form-group">
+                        <label><input type="checkbox" id="cleanupDownloads" checked> CSV自動削除</label>
+                    </div>
+                    <button id="save-options-btn" class="btn btn-primary">保存</button>
+                </div>
+            </section>
+
+            <!-- Logs Tab -->
+            <section id="logs-tab" class="tab-content">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>ログ</h2>
+                        <button id="clear-logs-btn" class="btn btn-secondary">クリア</button>
+                    </div>
+                    <div class="log-container">
+                        <pre id="logs-content">ログはありません</pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>LSTEP Automation v2.0</p>
+        </footer>
+    </div>
+
+    <!-- Client Template -->
+    <template id="client-template">
+        <div class="client-card" data-id="">
+            <div class="client-header">
+                <div class="client-title-row">
+                    <h3 class="client-name-display"></h3>
+                    <span class="setup-badge"></span>
+                </div>
+                <div class="client-btns">
+                    <button class="btn-setup">セットアップ</button>
+                    <button class="btn-save">保存</button>
+                    <button class="btn-remove">削除</button>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>名前</label>
+                    <input type="text" class="client-name" placeholder="クライアント名">
+                </div>
+                <div class="form-group">
+                    <label>エクスポートURL</label>
+                    <input type="text" class="client-url" placeholder="https://manager.linestep.net/line/exporter/...">
+                </div>
+                <div class="form-group">
+                    <label>プリセット名</label>
+                    <input type="text" class="client-preset" placeholder="毎日エクスポート">
+                </div>
+                <div class="form-group">
+                    <label>Sheets ID</label>
+                    <input type="text" class="client-sheet-id" placeholder="1ABcD...">
+                </div>
+                <div class="form-group">
+                    <label>シート名</label>
+                    <input type="text" class="client-sheet-name" placeholder="シート1">
+                </div>
+                <div class="form-group">
+                    <label>Lステップ メール</label>
+                    <input type="text" class="client-email" placeholder="login@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Lステップ パスワード</label>
+                    <input type="password" class="client-password" placeholder="••••••••">
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>

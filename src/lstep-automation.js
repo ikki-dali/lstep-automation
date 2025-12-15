@@ -6,9 +6,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BROWSER_DATA_DIR = path.join(process.cwd(), '.browser-data');
 const DOWNLOADS_DIR = path.join(process.cwd(), 'downloads');
 const LOGS_DIR = path.join(process.cwd(), 'logs');
+
+// クライアント名からブラウザプロファイル名を生成
+function sanitizeClientName(clientName) {
+  return clientName
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+// クライアントごとのブラウザデータディレクトリを取得
+function getBrowserDataDir(clientName) {
+  const profileName = sanitizeClientName(clientName);
+  return path.join(process.cwd(), '.browser-data', profileName);
+}
 
 const LSTEP_EMAIL = process.env.LSTEP_EMAIL;
 const LSTEP_PASSWORD = process.env.LSTEP_PASSWORD;
@@ -16,25 +30,212 @@ const LSTEP_PASSWORD = process.env.LSTEP_PASSWORD;
 // Chrome実行パス（環境変数で指定可能、未指定時はPuppeteerのbundled Chromiumを使用）
 const CHROME_EXECUTABLE_PATH = process.env.CHROME_EXECUTABLE_PATH;
 
-async function ensureDirectories() {
-  await fs.mkdir(BROWSER_DATA_DIR, { recursive: true });
-  await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
-  await fs.mkdir(LOGS_DIR, { recursive: true });
+// ヘルパー関数: 遅延
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function waitForLogin(page) {
+async function cleanupBrowserLocks(browserDataDir) {
+  // ブラウザのロックファイルを削除（起動失敗の原因になることがある）
+  const lockFiles = [
+    'SingletonLock',
+    'SingletonSocket',
+    'SingletonCookie',
+    'DevToolsActivePort'
+  ];
+
+  for (const lockFile of lockFiles) {
+    const lockPath = path.join(browserDataDir, lockFile);
+    try {
+      await fs.unlink(lockPath);
+    } catch (error) {
+      // ファイルが存在しない場合はエラーを無視
+      if (error.code !== 'ENOENT') {
+        console.log(`   ⚠️  Warning: Could not remove ${lockFile}: ${error.message}`);
+      }
+    }
+  }
+}
+
+async function ensureDirectories(browserDataDir) {
+  await fs.mkdir(browserDataDir, { recursive: true });
+  await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
+  await fs.mkdir(LOGS_DIR, { recursive: true });
+
+  // ロックファイルをクリーンアップ
+  await cleanupBrowserLocks(browserDataDir);
+}
+
+async function launchBrowserWithRetry(launchOptions, maxRetries = 2) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`   試行 ${attempt}/${maxRetries}: ブラウザを起動中...`);
+      const browser = await puppeteer.launch(launchOptions);
+      console.log('   ✅ ブラウザ起動成功');
+      return browser;
+    } catch (error) {
+      lastError = error;
+      console.log(`   ❌ 試行 ${attempt}/${maxRetries} 失敗: ${error.message}`);
+
+      if (attempt < maxRetries) {
+        console.log('   ⏳ 3秒後に再試行します...');
+        await delay(3000);
+
+        // リトライ前にロックファイルを再度クリーンアップ
+        if (launchOptions.userDataDir) {
+          await cleanupBrowserLocks(launchOptions.userDataDir);
+        }
+      }
+    }
+  }
+
+  throw new Error(`ブラウザの起動に失敗しました (${maxRetries}回試行): ${lastError.message}`);
+}
+
+async function waitForLogin(page, email = null, password = null) {
   console.log('⏸️  ログインが必要です');
   console.log('');
-  console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║  🔐 人間の操作が必要です                                    ║');
-  console.log('╚════════════════════════════════════════════════════════════╝');
-  console.log('');
-  console.log('開いたブラウザで以下を行ってください:');
-  console.log('  1. メールアドレスを入力');
-  console.log('  2. パスワードを入力');
-  console.log('  3. reCAPTCHAのチェックボックスをクリック');
-  console.log('  4. ログインボタンをクリック');
-  console.log('');
+
+  // メールとパスワードが提供されている場合は自動入力
+  if (email && password) {
+    console.log('🔐 ログイン情報を自動入力します...');
+
+    try {
+      // ページが完全に読み込まれるまで待機
+      await delay(2000);
+
+      // 複数のセレクターパターンを試す
+      const emailSelectors = [
+        'input[name="email"]',
+        'input[type="email"]',
+        'input[id="email"]',
+        'input[placeholder*="メール"]',
+        'input[placeholder*="mail"]'
+      ];
+
+      const passwordSelectors = [
+        'input[name="password"]',
+        'input[type="password"]',
+        'input[id="password"]',
+        'input[placeholder*="パスワード"]'
+      ];
+
+      // メールアドレス入力欄を探す
+      let emailInput = null;
+      for (const selector of emailSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 2000 });
+          emailInput = selector;
+          break;
+        } catch (e) {
+          // 次のセレクターを試す
+        }
+      }
+
+      if (!emailInput) {
+        throw new Error('メールアドレス入力欄が見つかりませんでした');
+      }
+
+      // メールアドレスを入力
+      await page.click(emailInput);
+      await delay(300);
+      await page.type(emailInput, email, { delay: 50 });
+      console.log('   ✅ メールアドレスを入力しました');
+
+      // パスワード入力欄を探す
+      let passwordInput = null;
+      for (const selector of passwordSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 2000 });
+          passwordInput = selector;
+          break;
+        } catch (e) {
+          // 次のセレクターを試す
+        }
+      }
+
+      if (!passwordInput) {
+        throw new Error('パスワード入力欄が見つかりませんでした');
+      }
+
+      // パスワードを入力
+      await page.click(passwordInput);
+      await delay(300);
+      await page.type(passwordInput, password, { delay: 50 });
+      console.log('   ✅ パスワードを入力しました');
+
+      console.log('');
+      console.log('╔════════════════════════════════════════════════════════════╗');
+      console.log('║                                                            ║');
+      console.log('║      👆 reCAPTCHA のチェックをお願いします                  ║');
+      console.log('║                                                            ║');
+      console.log('║      チェック完了後、自動的にログインします                  ║');
+      console.log('║                                                            ║');
+      console.log('╚════════════════════════════════════════════════════════════╝');
+      console.log('');
+
+      // reCAPTCHAが完了するまで待機（チェックボックスがチェックされるのを待つ）
+      await page.waitForFunction(
+        () => {
+          const recaptcha = document.querySelector('.recaptcha-checkbox');
+          return recaptcha && recaptcha.getAttribute('aria-checked') === 'true';
+        },
+        { timeout: 180000 }
+      );
+
+      console.log('   ✅ reCAPTCHA完了を検出しました');
+
+      // ログインボタンをクリック
+      await delay(1000);
+
+      // 複数のログインボタンセレクターを試す
+      const loginButtonSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button.login-button',
+        'button.btn-login',
+        'a.btn-login'
+      ];
+
+      let buttonClicked = false;
+      for (const selector of loginButtonSelectors) {
+        try {
+          await page.click(selector, { timeout: 2000 });
+          buttonClicked = true;
+          break;
+        } catch (e) {
+          // 次のセレクターを試す
+        }
+      }
+
+      if (buttonClicked) {
+        console.log('   ✅ ログインボタンをクリックしました');
+      } else {
+        console.log('   ⚠️  ログインボタンが見つからなかったため、Enterキーを押します');
+        await page.keyboard.press('Enter');
+      }
+
+      console.log('');
+
+    } catch (error) {
+      console.log('⚠️  自動入力に失敗しました。手動でログインしてください。');
+      console.log(`エラー: ${error.message}`);
+    }
+  } else {
+    console.log('╔════════════════════════════════════════════════════════════╗');
+    console.log('║  🔐 人間の操作が必要です                                    ║');
+    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('');
+    console.log('開いたブラウザで以下を行ってください:');
+    console.log('  1. メールアドレスを入力');
+    console.log('  2. パスワードを入力');
+    console.log('  3. reCAPTCHAのチェックボックスをクリック');
+    console.log('  4. ログインボタンをクリック');
+    console.log('');
+  }
+
   console.log('⏳ ログイン完了を待機中...');
   
   let loginCompleted = false;
@@ -53,9 +254,9 @@ async function waitForLogin(page) {
         break;
       }
       
-      await page.waitForTimeout(1000);
+      await delay(1000);
     } catch (error) {
-      await page.waitForTimeout(1000);
+      await delay(1000);
     }
   }
   
@@ -63,7 +264,7 @@ async function waitForLogin(page) {
     throw new Error('ログインがタイムアウトしました（3分）');
   }
   
-  await page.waitForTimeout(2000);
+  await delay(2000);
   return true;
 }
 
@@ -71,13 +272,13 @@ async function navigateToExportPage(page, browser) {
   console.log('�� 友達リストからエクスポートページへ移動中...');
   
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(2000);
+  await delay(2000);
   
   console.log('   🔍 「CSV操作」ボタンを探しています...');
   await page.waitForSelector('text/CSV操作', { timeout: 10000 });
   await page.click('text/CSV操作');
   console.log('   ✅ 「CSV操作」ボタンをクリックしました');
-  await page.waitForTimeout(2000);
+  await delay(2000);
   
   const pages = await browser.pages();
   const newPage = pages[pages.length - 1];
@@ -86,7 +287,7 @@ async function navigateToExportPage(page, browser) {
   await newPage.waitForSelector('text/CSVエクスポートリスト', { timeout: 10000 });
   await newPage.click('text/CSVエクスポートリスト');
   console.log('   ✅ 「CSVエクスポートリスト」ボタンをクリックしました');
-  await newPage.waitForTimeout(5000);
+  await delay(5000);
   
   const allPages = await browser.pages();
   const exportPage = allPages[allPages.length - 1];
@@ -96,18 +297,23 @@ async function navigateToExportPage(page, browser) {
   return exportPage;
 }
 
-export async function exportCSV(exporterUrl, presetName, options = {}) {
+export async function exportCSV(exporterUrl, presetName, clientName, options = {}) {
   const {
     timeout = 60000,
     screenshotOnError = true,
     headless = true,
+    email = null,
+    password = null,
   } = options;
 
-  await ensureDirectories();
+  const browserDataDir = getBrowserDataDir(clientName);
+  await ensureDirectories(browserDataDir);
 
   console.log('========================================');
   console.log('📋 Lステップ CSV エクスポート開始');
   console.log('========================================');
+  console.log(`クライアント: ${clientName}`);
+  console.log(`プロファイル: ${sanitizeClientName(clientName)}`);
   console.log(`プリセット: ${presetName}`);
   console.log(`URL: ${exporterUrl}`);
 
@@ -120,13 +326,15 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
 
     const launchOptions = {
       headless: headless === true ? 'new' : headless,
-      userDataDir: BROWSER_DATA_DIR,
+      userDataDir: browserDataDir,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled'
       ],
+      dumpio: false, // デバッグ時はtrueに設定
+      protocolTimeout: 180000, // 3分に増やす（デフォルトは180秒）
     };
 
     // 環境変数でChrome実行パスが指定されている場合のみ設定
@@ -134,12 +342,19 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
       launchOptions.executablePath = CHROME_EXECUTABLE_PATH;
     }
 
-    browser = await puppeteer.launch(launchOptions);
+    console.log('   ⚙️  起動オプション:', JSON.stringify({
+      headless: launchOptions.headless,
+      userDataDir: launchOptions.userDataDir,
+      executablePath: launchOptions.executablePath || 'bundled Chromium',
+      protocolTimeout: launchOptions.protocolTimeout
+    }, null, 2));
+
+    browser = await launchBrowserWithRetry(launchOptions);
 
     let page = await browser.newPage();
     console.log('✅ ブラウザ起動完了');
 
-    const client = await page.target().createCDPSession();
+    const client = await page.createCDPSession();
     await client.send('Page.setDownloadBehavior', {
       behavior: 'allow',
       downloadPath: DOWNLOADS_DIR,
@@ -172,23 +387,25 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
         // 表示モードで再起動
         const visibleLaunchOptions = {
           headless: false,
-          userDataDir: BROWSER_DATA_DIR,
+          userDataDir: browserDataDir,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-blink-features=AutomationControlled'
           ],
+          dumpio: false,
+          protocolTimeout: 180000,
         };
 
         if (CHROME_EXECUTABLE_PATH) {
           visibleLaunchOptions.executablePath = CHROME_EXECUTABLE_PATH;
         }
 
-        browser = await puppeteer.launch(visibleLaunchOptions);
+        browser = await launchBrowserWithRetry(visibleLaunchOptions);
         page = await browser.newPage();
 
-        const client = await page.target().createCDPSession();
+        const client = await page.createCDPSession();
         await client.send('Page.setDownloadBehavior', {
           behavior: 'allow',
           downloadPath: DOWNLOADS_DIR,
@@ -200,7 +417,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
         });
       }
 
-      await waitForLogin(page);
+      await waitForLogin(page, email, password);
 
       await page.goto(exporterUrl, {
         waitUntil: 'networkidle0',
@@ -217,7 +434,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     if (currentUrl.includes('/friend') || currentUrl.includes('/line/show') || currentPageTitle.includes('友だち')) {
       const exportPage = await navigateToExportPage(page, browser);
 
-      await exportPage.waitForTimeout(2000);
+      await delay(2000);
 
       console.log(`   新しいページURL: ${exportPage.url()}`);
       const newTitle = await exportPage.title();
@@ -234,7 +451,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
 
     console.log('📍 ステップ2: プリセット選択');
     
-    await page.waitForTimeout(5000);
+    await delay(5000);
     
     const readyState = await page.evaluate(() => document.readyState);
     console.log(`   ページ状態: ${readyState}`);
@@ -414,7 +631,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {
       console.log('   ℹ️  ナビゲーションイベントなし（同じページ内の可能性）');
     });
-    await page.waitForTimeout(2000);
+    await delay(2000);
 
     console.log('📍 ステップ3: エクスポート実行');
 
@@ -453,12 +670,12 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     console.log('   ⏳ サーバー側でCSV生成中...');
 
     // CSV生成を待つ（サーバー処理時間を考慮）
-    await page.waitForTimeout(5000);
+    await delay(5000);
 
     // ページをリロードしてエクスポート履歴を最新化
     console.log('   🔄 ページをリロードして履歴を更新中...');
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForTimeout(3000);
+    await delay(3000);
 
     console.log('📍 ステップ5: エクスポート履歴からダウンロード');
     console.log('   🔍 エクスポート履歴テーブルを探しています...');
@@ -556,7 +773,7 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
         break;
       }
 
-      await page.waitForTimeout(1000);
+      await delay(1000);
     }
 
     if (!downloadedFile) {
@@ -577,6 +794,25 @@ export async function exportCSV(exporterUrl, presetName, options = {}) {
     console.log('❌ CSV エクスポート失敗');
     console.log('========================================');
     console.error(`エラー: ${error.message}`);
+
+    // デバッグ用に詳細なエラー情報を表示
+    if (error.message.includes('socket hang up') || error.message.includes('Protocol error')) {
+      console.error('');
+      console.error('🔍 ブラウザ起動エラーの詳細:');
+      console.error('   このエラーは、Puppeteerがブラウザに接続できない時に発生します。');
+      console.error('   考えられる原因:');
+      console.error('   1. Chromeがクラッシュまたは起動に失敗');
+      console.error('   2. ポート競合や既存のChromeプロセスとの干渉');
+      console.error('   3. .browser-dataディレクトリの破損');
+      console.error('   4. システムリソース不足');
+      console.error('');
+      console.error('   エラーの種類:', error.constructor.name);
+      if (error.stack) {
+        console.error('   スタックトレース (最初の3行):');
+        const stackLines = error.stack.split('\n').slice(0, 4);
+        stackLines.forEach(line => console.error('   ' + line));
+      }
+    }
 
     if (screenshotOnError && browser) {
       try {
