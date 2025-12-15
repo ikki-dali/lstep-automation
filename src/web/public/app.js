@@ -81,8 +81,6 @@ function addClientCard(client = null) {
         card.querySelector('.client-preset').value = client.presetName || '';
         card.querySelector('.client-sheet-id').value = client.sheetId || '';
         card.querySelector('.client-sheet-name').value = client.sheetName || '';
-        card.querySelector('.client-email').value = client.email || '';
-        card.querySelector('.client-password').value = client.password || '';
         
         if (client.isSetup) {
             cardEl.classList.add('setup-done');
@@ -96,10 +94,10 @@ function addClientCard(client = null) {
         cardEl.querySelector('.client-name-display').textContent = this.value || '新規クライアント';
     });
     
-    // Setup button
-    card.querySelector('.btn-setup').addEventListener('click', () => {
+    // Cookie button
+    card.querySelector('.btn-cookie').addEventListener('click', () => {
         const id = cardEl.dataset.id;
-        if (id) runSetup(id);
+        if (id) openCookieModal(id, cardEl.querySelector('.client-name').value);
         else showMessage('先に保存してください', 'error');
     });
     
@@ -121,9 +119,7 @@ async function saveClient(cardEl) {
         exporterUrl: cardEl.querySelector('.client-url').value,
         presetName: cardEl.querySelector('.client-preset').value,
         sheetId: cardEl.querySelector('.client-sheet-id').value,
-        sheetName: cardEl.querySelector('.client-sheet-name').value,
-        email: cardEl.querySelector('.client-email').value,
-        password: cardEl.querySelector('.client-password').value
+        sheetName: cardEl.querySelector('.client-sheet-name').value
     };
     
     try {
@@ -199,7 +195,7 @@ function updateSetupUI() {
         const status = setupStatuses.find(s => s.id === id);
         
         const badge = card.querySelector('.setup-badge');
-        const btn = card.querySelector('.btn-setup');
+        const btn = card.querySelector('.btn-cookie');
         
         if (!status) {
             badge.textContent = '未保存';
@@ -207,41 +203,84 @@ function updateSetupUI() {
             return;
         }
         
-        if (status.isRunning) {
-            badge.textContent = 'セットアップ中...';
-            badge.className = 'setup-badge running';
-            btn.disabled = true;
-        } else if (status.isSetup) {
-            badge.textContent = '✓ 設定済み';
+        if (status.isSetup || status.hasCookies) {
+            badge.textContent = '✓ Cookie設定済み';
             badge.className = 'setup-badge done';
-            btn.disabled = false;
-            btn.textContent = '再セットアップ';
+            btn.textContent = 'Cookie更新';
+            btn.classList.add('configured');
             card.classList.add('setup-done');
         } else {
-            badge.textContent = '未設定';
+            badge.textContent = 'Cookie未設定';
             badge.className = 'setup-badge none';
-            btn.disabled = false;
-            btn.textContent = 'セットアップ';
+            btn.textContent = 'Cookie設定';
+            btn.classList.remove('configured');
         }
     });
 }
 
-// Run setup
-async function runSetup(clientId) {
+// Cookie Modal
+let currentCookieClientId = null;
+const cookieModal = document.getElementById('cookie-modal');
+const cookieInput = document.getElementById('cookie-input');
+
+function openCookieModal(clientId, clientName) {
+    currentCookieClientId = clientId;
+    cookieModal.querySelector('.modal-header h2').textContent = `🍪 ${clientName} のCookie設定`;
+    cookieInput.value = '';
+    cookieModal.classList.add('active');
+}
+
+function closeCookieModal() {
+    cookieModal.classList.remove('active');
+    currentCookieClientId = null;
+}
+
+// Modal close handlers
+document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', closeCookieModal);
+});
+
+cookieModal.addEventListener('click', (e) => {
+    if (e.target === cookieModal) closeCookieModal();
+});
+
+// Save cookie
+document.getElementById('save-cookie-btn').addEventListener('click', async () => {
+    if (!currentCookieClientId) return;
+    
+    const cookieText = cookieInput.value.trim();
+    
+    if (!cookieText) {
+        showMessage('Cookie JSONを入力してください', 'error');
+        return;
+    }
+    
     try {
-        const res = await fetch(`/api/setup/${clientId}`, { method: 'POST' });
-        const data = await res.json();
+        const cookies = JSON.parse(cookieText);
+        
+        if (!Array.isArray(cookies)) {
+            showMessage('Cookie JSONは配列形式で入力してください', 'error');
+            return;
+        }
+        
+        const res = await fetch(`/api/clients/${currentCookieClientId}/cookies`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cookies })
+        });
         
         if (res.ok) {
-            showMessage(data.message + ' ブラウザでログインしてください。', 'success');
+            showMessage('Cookieを保存しました', 'success');
+            closeCookieModal();
             await loadSetupStatus();
         } else {
-            showMessage(data.error, 'error');
+            const data = await res.json();
+            showMessage(data.error || '保存に失敗しました', 'error');
         }
     } catch (e) {
-        showMessage('セットアップ開始に失敗しました', 'error');
+        showMessage('無効なJSON形式です', 'error');
     }
-}
+});
 
 // Options
 async function loadOptions() {

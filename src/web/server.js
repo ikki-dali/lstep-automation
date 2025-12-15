@@ -210,6 +210,32 @@ app.post('/api/credentials', requireAuth, (req, res) => {
 });
 
 // ============================================================
+// Cookie API
+// ============================================================
+
+// POST /api/clients/:id/cookies - Cookie保存
+app.post('/api/clients/:id/cookies', requireAuth, (req, res) => {
+  try {
+    const { cookies } = req.body;
+    
+    if (!cookies || !Array.isArray(cookies)) {
+      return res.status(400).json({ error: 'Cookieデータが無効です' });
+    }
+    
+    db.setClientCookies(req.params.id, req.session.userId, cookies);
+    res.json({ success: true, message: 'Cookieを保存しました' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/clients/:id/cookies - Cookie確認
+app.get('/api/clients/:id/cookies', requireAuth, (req, res) => {
+  const cookies = db.getClientCookies(req.params.id, req.session.userId);
+  res.json({ hasCookies: !!cookies && cookies.length > 0 });
+});
+
+// ============================================================
 // セットアップAPI
 // ============================================================
 
@@ -221,6 +247,7 @@ app.get('/api/setup/status', requireAuth, (req, res) => {
     id: c.id,
     name: c.name,
     isSetup: !!c.is_setup,
+    hasCookies: !!c.cookies,
     isRunning: setupProcesses.has(c.id)
   }));
   

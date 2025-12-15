@@ -46,6 +46,7 @@ export function initDB() {
       sheet_name TEXT,
       email TEXT,
       password TEXT,
+      cookies TEXT,
       is_setup INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
@@ -126,18 +127,18 @@ export function getClientById(clientId, userId) {
 export function createClient(userId, data) {
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO clients (id, user_id, name, exporter_url, preset_name, sheet_id, sheet_name, email, password)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, userId, data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName, data.email, data.password);
+    INSERT INTO clients (id, user_id, name, exporter_url, preset_name, sheet_id, sheet_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, userId, data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName);
   
   return { id, ...data };
 }
 
 export function updateClient(clientId, userId, data) {
   db.prepare(`
-    UPDATE clients SET name = ?, exporter_url = ?, preset_name = ?, sheet_id = ?, sheet_name = ?, email = ?, password = ?
+    UPDATE clients SET name = ?, exporter_url = ?, preset_name = ?, sheet_id = ?, sheet_name = ?
     WHERE id = ? AND user_id = ?
-  `).run(data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName, data.email, data.password, clientId, userId);
+  `).run(data.name, data.exporterUrl, data.presetName, data.sheetId, data.sheetName, clientId, userId);
 }
 
 export function deleteClient(clientId, userId) {
@@ -146,6 +147,16 @@ export function deleteClient(clientId, userId) {
 
 export function setClientSetup(clientId, isSetup) {
   db.prepare('UPDATE clients SET is_setup = ? WHERE id = ?').run(isSetup ? 1 : 0, clientId);
+}
+
+export function setClientCookies(clientId, userId, cookies) {
+  db.prepare('UPDATE clients SET cookies = ?, is_setup = 1 WHERE id = ? AND user_id = ?')
+    .run(JSON.stringify(cookies), clientId, userId);
+}
+
+export function getClientCookies(clientId, userId) {
+  const row = db.prepare('SELECT cookies FROM clients WHERE id = ? AND user_id = ?').get(clientId, userId);
+  return row && row.cookies ? JSON.parse(row.cookies) : null;
 }
 
 // 認証情報関連

@@ -134,7 +134,7 @@
                     <span class="setup-badge"></span>
                 </div>
                 <div class="client-btns">
-                    <button class="btn-setup">セットアップ</button>
+                    <button class="btn-cookie">Cookie設定</button>
                     <button class="btn-save">保存</button>
                     <button class="btn-remove">削除</button>
                 </div>
@@ -160,17 +160,41 @@
                     <label>シート名</label>
                     <input type="text" class="client-sheet-name" placeholder="シート1">
                 </div>
-                <div class="form-group">
-                    <label>Lステップ メール</label>
-                    <input type="text" class="client-email" placeholder="login@example.com">
-                </div>
-                <div class="form-group">
-                    <label>Lステップ パスワード</label>
-                    <input type="password" class="client-password" placeholder="••••••••">
-                </div>
             </div>
         </div>
     </template>
+
+    <!-- Cookie Modal -->
+    <div id="cookie-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🍪 Cookie設定</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="cookie-instructions">
+                    <h3>Cookie取得手順</h3>
+                    <ol>
+                        <li>新しいタブで <a href="https://manager.linestep.net/account/login" target="_blank">Lステップ</a> を開く</li>
+                        <li>通常通りログイン（reCAPTCHA対応）</li>
+                        <li>ログイン後、<kbd>F12</kbd>キーで開発者ツールを開く</li>
+                        <li>「Application」タブ → 「Cookies」→「https://manager.linestep.net」</li>
+                        <li>表の上で右クリック →「Copy all as JSON」</li>
+                        <li>下の入力欄に貼り付け</li>
+                    </ol>
+                </div>
+                <div class="form-group">
+                    <label>Cookie JSON</label>
+                    <textarea id="cookie-input" rows="8" placeholder='[{"name": "...", "value": "...", ...}]'></textarea>
+                </div>
+                <p class="cookie-note">※ Cookieは安全に保存され、Lステップへのアクセスにのみ使用されます</p>
+            </div>
+            <div class="modal-footer">
+                <button id="save-cookie-btn" class="btn btn-primary">保存</button>
+                <button class="btn btn-secondary modal-close">キャンセル</button>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
