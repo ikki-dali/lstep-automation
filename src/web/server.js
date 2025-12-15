@@ -128,6 +128,7 @@ app.get('/api/clients', requireAuth, async (req, res) => {
     const formatted = clients.map(c => ({
       id: c.id,
       name: c.name,
+      profile: c.profile || '',
       exporterUrl: c.exporter_url,
       presetName: c.preset_name,
       sheetId: c.sheet_id,
