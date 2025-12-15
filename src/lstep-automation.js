@@ -276,32 +276,31 @@ async function switchLineAccount(page, targetAccountName) {
     // ヘッダー右端のアカウントドロップダウンをクリック
     let dropdownOpened = false;
     
-    // 方法1: 「グループ」テキストを含むheadlessuiボタン（？ボタンではなく、FDグループボタン）
+    // 方法1: 一番右のheadlessuiボタン（アカウント切り替えメニュー）
+    // ？ヘルプボタンは左、アカウントボタンは右にあるので、最後のボタンを取得
     try {
       const menuButtons = await page.$$('button[id^="headlessui-menu-button"]');
-      for (const btn of menuButtons) {
-        const text = await page.evaluate(el => el.textContent?.trim(), btn);
-        // 「グループ」を含むボタンを探す（？ヘルプボタンを除外）
-        if (text && text.includes('グループ')) {
-          await btn.click();
-          await delay(1500);
-          console.log(`   📂 ドロップダウンを開きました（${text}）`);
-          dropdownOpened = true;
-          break;
-        }
+      if (menuButtons.length > 0) {
+        // 一番右（最後）のボタンを取得
+        const accountButton = menuButtons[menuButtons.length - 1];
+        const text = await page.evaluate(el => el.textContent?.trim(), accountButton);
+        await accountButton.click();
+        await delay(1500);
+        console.log(`   📂 ドロップダウンを開きました（${text}）`);
+        dropdownOpened = true;
       }
     } catch (e) {
       // 方法2に進む
     }
     
-    // 方法2: ヘッダー右側のアカウントボタン
+    // 方法2: 「切り替え」を含むメニューが出るボタンを探す
     if (!dropdownOpened) {
       try {
-        const allButtons = await page.$$('button');
+        const allButtons = await page.$$('header button, nav button');
         for (const btn of allButtons) {
           const text = await page.evaluate(el => el.textContent?.trim(), btn);
-          // 「グループ」「アカウント」などを含むボタン
-          if (text && (text.includes('グループ') || text.includes('アカウント')) && !text.includes('講座')) {
+          // ？や送信数は除外
+          if (text && !text.includes('？') && !text.includes('送信') && text.length > 2) {
             await btn.click();
             await delay(1500);
             console.log(`   📂 ドロップダウンを開きました（${text}）`);
