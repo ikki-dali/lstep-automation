@@ -313,77 +313,50 @@ async function switchLineAccount(page, targetAccountName) {
       }
     }
     
-    // 「○○に切り替え」メニューを探す（部分一致・類似検索）
-    // 正規化: ハイフン、スペース、全角半角を統一して比較
-    const normalize = (str) => {
-      return str
-        .replace(/[-－ー]/g, '')  // ハイフン削除
-        .replace(/\s+/g, '')      // スペース削除
-        .replace(/　/g, '')       // 全角スペース削除
-        .toLowerCase();
-    };
+    // メニューが完全に開くまで待つ
+    await delay(1000);
     
-    const targetNormalized = normalize(targetAccountName);
+    // 「○○に切り替え」メニューを探す
+    // Headless UIのメニューアイテムを直接探す
+    const switchItems = await page.$$('[id^="headlessui-menu-item"]');
+    console.log(`   📋 メニューアイテム数: ${switchItems.length}`);
     
-    // メニュー項目を取得（Headless UIのメニューアイテムを優先）
-    const menuItems = await page.$$('[id^="headlessui-menu-item"], [role="menuitem"], a, button, .dropdown-item, li');
-    
-    // デバッグ: 見つかった切り替えメニューを表示
-    const switchMenus = [];
-    for (const item of menuItems) {
+    // 「切り替え」を含むアイテムを探してクリック
+    for (const item of switchItems) {
       const text = await page.evaluate(el => el.textContent?.trim(), item);
+      console.log(`   🔍 メニュー: ${text}`);
+      
       if (text && text.includes('切り替え')) {
-        switchMenus.push(text);
-      }
-    }
-    if (switchMenus.length > 0) {
-      console.log(`   📋 見つかった切り替えメニュー: ${switchMenus.slice(0, 5).join(', ')}`);
-    } else {
-      console.log(`   ⚠️ 切り替えメニューが見つかりません`);
-    }
-    
-    let bestMatch = null;
-    let bestMatchText = '';
-    
-    for (const item of menuItems) {
-      const text = await page.evaluate(el => el.textContent?.trim(), item);
-      if (!text || !text.includes('切り替え')) continue;
-      
-      const textNormalized = normalize(text);
-      
-      // 正規化した文字列で部分一致を確認
-      if (textNormalized.includes(targetNormalized) || targetNormalized.includes(textNormalized.replace('に切り替え', '').replace('にきりかえ', ''))) {
-        bestMatch = item;
-        bestMatchText = text;
-        break;
-      }
-      
-      // 部分的に一致する文字が多いものを選ぶ
-      const menuAccountName = text.replace('に切り替え', '').trim();
-      const menuNormalized = normalize(menuAccountName);
-      
-      // 3文字以上一致すれば候補として記録
-      let matchCount = 0;
-      for (let i = 0; i < Math.min(targetNormalized.length, menuNormalized.length); i++) {
-        if (targetNormalized[i] === menuNormalized[i]) matchCount++;
-      }
-      
-      if (matchCount >= 3 && !bestMatch) {
-        bestMatch = item;
-        bestMatchText = text;
+        // ターゲットアカウント名と部分一致するか確認
+        const targetLower = targetAccountName.toLowerCase().replace(/[-\s]/g, '');
+        const textLower = text.toLowerCase().replace(/[-\s]/g, '');
+        
+        if (textLower.includes(targetLower) || targetLower.split('').some(char => textLower.includes(char))) {
+          console.log(`   ✅ 「${text}」をクリック`);
+          await item.click();
+          await delay(3000);
+          
+          // ページ遷移を待つ
+          await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
+          
+          console.log(`   ✅ アカウント切り替え完了`);
+          return true;
+        }
       }
     }
     
-    if (bestMatch) {
-      console.log(`   ✅ 「${bestMatchText}」をクリック`);
-      await bestMatch.click();
-      await delay(3000);
-      
-      // ページ遷移を待つ
-      await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
-      
-      console.log(`   ✅ アカウント切り替え完了`);
-      return true;
+    // Headless UIで見つからない場合、一般的なセレクターで探す
+    const allLinks = await page.$$('a');
+    for (const link of allLinks) {
+      const text = await page.evaluate(el => el.textContent?.trim(), link);
+      if (text && text.includes('切り替え')) {
+        console.log(`   ✅ 「${text}」をクリック（リンク）`);
+        await link.click();
+        await delay(3000);
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
+        console.log(`   ✅ アカウント切り替え完了`);
+        return true;
+      }
     }
     
     console.log(`   ⚠️ 切り替えメニューが見つかりません（現在のアカウントで続行）`);
