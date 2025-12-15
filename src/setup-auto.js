@@ -52,27 +52,90 @@ async function setup(clientId, userId) {
     await browser.launch();
     await browser.goto(loginUrl);
     
-    // 自動入力
+    // ページにアカウント情報オーバーレイを表示
+    await new Promise(r => setTimeout(r, 2000));
+    
+    await browser.page.evaluate((clientName, email, password) => {
+      // オーバーレイを作成
+      const overlay = document.createElement('div');
+      overlay.id = 'lstep-setup-overlay';
+      overlay.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 10px;
+          right: 10px;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+          z-index: 999999;
+          font-family: -apple-system, sans-serif;
+          max-width: 350px;
+          border: 1px solid rgba(78, 205, 196, 0.3);
+        ">
+          <div style="font-size: 14px; color: #4ecdc4; margin-bottom: 12px; font-weight: bold;">
+            📋 ${clientName} のセットアップ
+          </div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">
+            以下のアカウントでログインしてください：
+          </div>
+          <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">ID</div>
+            <div style="font-size: 14px; color: #fff; font-family: monospace; word-break: break-all;">${email}</div>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">パスワード</div>
+            <div style="font-size: 14px; color: #fff; font-family: monospace;">${password}</div>
+          </div>
+          <div style="font-size: 11px; color: #4ecdc4; text-align: center;">
+            ✓ reCAPTCHAを完了 → ログインボタン
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }, client.name, client.email || '(未設定)', client.password || '(未設定)');
+
+    // 自動入力も試みる
     if (client.email && client.password) {
       console.log('ログイン情報を自動入力中...');
-      await new Promise(r => setTimeout(r, 2000));
-      
+
       try {
-        const emailSel = 'input[name="email"], input[type="email"]';
-        await browser.page.waitForSelector(emailSel, { timeout: 5000 });
-        await browser.page.type(emailSel, client.email, { delay: 50 });
-        console.log('メールアドレス入力完了');
+        // ユーザーIDの入力欄を探す（Lステップは "ユーザーID" というラベル）
+        const idSelectors = [
+          'input[name="email"]',
+          'input[type="email"]',
+          'input[name="user_id"]',
+          'input[name="login_id"]',
+          'input:not([type="password"]):not([type="hidden"]):not([type="submit"])'
+        ];
         
-        const passSel = 'input[name="password"], input[type="password"]';
-        await browser.page.waitForSelector(passSel, { timeout: 5000 });
-        await browser.page.type(passSel, client.password, { delay: 50 });
-        console.log('パスワード入力完了');
+        for (const sel of idSelectors) {
+          try {
+            const el = await browser.page.$(sel);
+            if (el) {
+              await el.click();
+              await browser.page.keyboard.type(client.email, { delay: 30 });
+              console.log('ID入力完了');
+              break;
+            }
+          } catch (e) {}
+        }
+
+        // パスワード入力
+        const passSel = 'input[type="password"]';
+        try {
+          await browser.page.waitForSelector(passSel, { timeout: 3000 });
+          await browser.page.click(passSel);
+          await browser.page.keyboard.type(client.password, { delay: 30 });
+          console.log('パスワード入力完了');
+        } catch (e) {}
       } catch (e) {
-        console.log(`自動入力エラー: ${e.message}`);
+        console.log(`自動入力スキップ: ${e.message}`);
       }
     }
-    
-    console.log('ブラウザでログインを完了してください（reCAPTCHA対応）');
+
+    console.log('ブラウザでreCAPTCHAを完了してログインしてください');
     console.log('ログイン待機中... (最大5分)');
     
     // ログイン完了待機

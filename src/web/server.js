@@ -42,6 +42,18 @@ function requireAuth(req, res, next) {
 const setupProcesses = new Map();
 
 // ============================================================
+// ヘルスチェック（認証不要）
+// ============================================================
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============================================================
 // 認証API
 // ============================================================
 
