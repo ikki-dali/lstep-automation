@@ -274,41 +274,56 @@ async function switchLineAccount(page, targetAccountName) {
   
   try {
     // ヘッダー右端のアカウントドロップダウンをクリック
-    // 「FDグループ」などのアカウント名が表示されているボタン
     let dropdownOpened = false;
     
-    // 方法1: text/セレクターで「グループ」を含む要素をクリック
+    // 方法1: Headless UIのメニューボタン（最も確実）
     try {
-      await page.click('text/グループ');
-      await delay(2000);
-      console.log(`   📂 ドロップダウンを開きました`);
-      dropdownOpened = true;
+      const menuButton = await page.$('button[id^="headlessui-menu-button"]');
+      if (menuButton) {
+        await menuButton.click();
+        await delay(1500);
+        console.log(`   📂 ドロップダウンを開きました（headlessui）`);
+        dropdownOpened = true;
+      }
     } catch (e) {
       // 方法2に進む
     }
     
-    // 方法2: ページ内で「グループ」を含む短いテキストの要素を探す
+    // 方法2: ヘッダー内のボタン（プロフィール画像の横）
     if (!dropdownOpened) {
-      const allElements = await page.$$('button, a, div, span, li');
-      for (const el of allElements) {
-        try {
-          const text = await page.evaluate(el => el.textContent?.trim(), el);
-          const isVisible = await page.evaluate(el => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-          }, el);
-          
-          if (text && text.includes('グループ') && text.length < 20 && isVisible) {
-            console.log(`   🔍 「${text}」をクリック`);
-            await el.click();
-            await delay(2000);
-            console.log(`   📂 ドロップダウンを開きました`);
+      try {
+        const headerButtons = await page.$$('header button, nav button, .navbar button');
+        for (const btn of headerButtons) {
+          const text = await page.evaluate(el => el.textContent?.trim(), btn);
+          if (text && (text.includes('グループ') || text.includes('expand'))) {
+            await btn.click();
+            await delay(1500);
+            console.log(`   📂 ドロップダウンを開きました（ヘッダーボタン）`);
             dropdownOpened = true;
             break;
           }
-        } catch (e) {
-          // 次の要素へ
         }
+      } catch (e) {
+        // 方法3に進む
+      }
+    }
+    
+    // 方法3: expand_more アイコンを含むボタン
+    if (!dropdownOpened) {
+      try {
+        const expandButtons = await page.$$('button');
+        for (const btn of expandButtons) {
+          const hasExpand = await page.evaluate(el => el.innerHTML.includes('expand_more'), btn);
+          if (hasExpand) {
+            await btn.click();
+            await delay(1500);
+            console.log(`   📂 ドロップダウンを開きました（expand_more）`);
+            dropdownOpened = true;
+            break;
+          }
+        }
+      } catch (e) {
+        // 続行
       }
     }
     
@@ -324,8 +339,8 @@ async function switchLineAccount(page, targetAccountName) {
     
     const targetNormalized = normalize(targetAccountName);
     
-    // メニュー項目を取得（表示されている要素のみ）
-    const menuItems = await page.$$('a, button, [role="menuitem"], .dropdown-item, li, div[class*="menu"] a, ul a');
+    // メニュー項目を取得（Headless UIのメニューアイテムを優先）
+    const menuItems = await page.$$('[id^="headlessui-menu-item"], [role="menuitem"], a, button, .dropdown-item, li');
     
     // デバッグ: 見つかった切り替えメニューを表示
     const switchMenus = [];
