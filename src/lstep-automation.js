@@ -304,6 +304,7 @@ export async function exportCSV(exporterUrl, presetName, clientName, options = {
     headless = true,
     email = null,
     password = null,
+    cookies = null,
   } = options;
 
   const browserDataDir = getBrowserDataDir(clientName);
@@ -353,6 +354,27 @@ export async function exportCSV(exporterUrl, presetName, clientName, options = {
 
     let page = await browser.newPage();
     console.log('✅ ブラウザ起動完了');
+
+    // Cookieが渡された場合は設定
+    if (cookies && Array.isArray(cookies) && cookies.length > 0) {
+      console.log('🍪 Cookieを設定中...');
+      try {
+        // PuppeteerのsetCookieフォーマットに変換
+        const puppeteerCookies = cookies.map(c => ({
+          name: c.name,
+          value: c.value,
+          domain: c.domain || '.linestep.net',
+          path: c.path || '/',
+          secure: c.secure !== false,
+          httpOnly: c.httpOnly !== false,
+          sameSite: c.sameSite || 'Lax'
+        }));
+        await page.setCookie(...puppeteerCookies);
+        console.log(`   ✅ ${puppeteerCookies.length}件のCookieを設定しました`);
+      } catch (cookieError) {
+        console.log(`   ⚠️ Cookie設定エラー: ${cookieError.message}`);
+      }
+    }
 
     const client = await page.createCDPSession();
     await client.send('Page.setDownloadBehavior', {

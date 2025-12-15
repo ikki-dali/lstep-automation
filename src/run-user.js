@@ -58,9 +58,12 @@ async function run(userId) {
     console.log(`[${i + 1}/${clients.length}] ${client.name}`);
     console.log('------------------------------------------------------------');
     
-    if (!client.is_setup) {
-      console.log('⚠️ セットアップが完了していません。スキップします。');
-      results.push({ name: client.name, success: false, error: '未セットアップ' });
+    // Cookieチェック
+    const cookies = client.cookies ? JSON.parse(client.cookies) : null;
+    
+    if (!cookies || cookies.length === 0) {
+      console.log('⚠️ Cookieが設定されていません。スキップします。');
+      results.push({ name: client.name, success: false, error: 'Cookie未設定' });
       continue;
     }
     
@@ -78,8 +81,7 @@ async function run(userId) {
         {
           ...options,
           userDataDir,
-          email: client.email,
-          password: client.password
+          cookies
         }
       );
       
