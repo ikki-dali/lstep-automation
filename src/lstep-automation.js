@@ -314,52 +314,49 @@ async function switchLineAccount(page, targetAccountName) {
     }
     
     // メニューが完全に開くまで待つ
-    await delay(1000);
+    await delay(1500);
     
-    // 「○○に切り替え」メニューを探す
-    // Headless UIのメニューアイテムを直接探す
-    const switchItems = await page.$$('[id^="headlessui-menu-item"]');
-    console.log(`   📋 メニューアイテム数: ${switchItems.length}`);
+    // 「○○に切り替え」のリンクを直接探す（メニューコンテナではなく、個別のリンク）
+    // 正規化関数
+    const normalize = (str) => str.toLowerCase().replace(/[-－ー\s　【】]/g, '');
+    const targetNorm = normalize(targetAccountName);
     
-    // 「切り替え」を含むアイテムを探してクリック
-    for (const item of switchItems) {
-      const text = await page.evaluate(el => el.textContent?.trim(), item);
-      console.log(`   🔍 メニュー: ${text}`);
-      
-      if (text && text.includes('切り替え')) {
-        // ターゲットアカウント名と部分一致するか確認
-        const targetLower = targetAccountName.toLowerCase().replace(/[-\s]/g, '');
-        const textLower = text.toLowerCase().replace(/[-\s]/g, '');
-        
-        if (textLower.includes(targetLower) || targetLower.split('').some(char => textLower.includes(char))) {
-          console.log(`   ✅ 「${text}」をクリック`);
-          await item.click();
-          await delay(3000);
-          
-          // ページ遷移を待つ
-          await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
-          
-          console.log(`   ✅ アカウント切り替え完了`);
-          return true;
-        }
+    // 全てのリンクから「○○に切り替え」を探す
+    const allLinks = await page.$$('a, button');
+    const switchLinks = [];
+    
+    for (const link of allLinks) {
+      const text = await page.evaluate(el => el.textContent?.trim(), link);
+      if (text && text.includes('に切り替え') && text.length < 50) {
+        switchLinks.push({ element: link, text });
       }
     }
     
-    // Headless UIで見つからない場合、一般的なセレクターで探す
-    const allLinks = await page.$$('a');
-    for (const link of allLinks) {
-      const text = await page.evaluate(el => el.textContent?.trim(), link);
-      if (text && text.includes('切り替え')) {
-        console.log(`   ✅ 「${text}」をクリック（リンク）`);
-        await link.click();
+    console.log(`   📋 見つかった切り替えリンク: ${switchLinks.map(l => l.text).join(', ')}`);
+    
+    // ターゲットアカウント名に最も近いリンクを探す
+    for (const { element, text } of switchLinks) {
+      // 「○○に切り替え」から「○○」を抽出
+      const accountName = text.replace('に切り替え', '').trim();
+      const accountNorm = normalize(accountName);
+      
+      console.log(`   🔍 比較: "${accountName}" vs "${targetAccountName}"`);
+      
+      // 部分一致チェック
+      if (accountNorm.includes(targetNorm) || targetNorm.includes(accountNorm)) {
+        console.log(`   ✅ 「${text}」をクリック`);
+        await element.click();
         await delay(3000);
+        
+        // ページ遷移を待つ
         await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
+        
         console.log(`   ✅ アカウント切り替え完了`);
         return true;
       }
     }
     
-    console.log(`   ⚠️ 切り替えメニューが見つかりません（現在のアカウントで続行）`);
+    console.log(`   ⚠️ 「${targetAccountName}」の切り替えメニューが見つかりません（現在のアカウントで続行）`);
     return false;
     
   } catch (error) {
