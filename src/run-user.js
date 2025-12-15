@@ -45,10 +45,12 @@ async function run(userId) {
   await initializeSheetsClient();
   
   // クライアント取得
+  console.log('クライアント取得中...');
   const clients = await db.getClientsByUser(userId);
-  const options = await db.getOptions(userId);
-  
   console.log(`クライアント数: ${clients.length}`);
+  
+  const options = await db.getOptions(userId);
+  console.log('オプション取得完了');
   console.log('');
   
   const results = [];
@@ -104,6 +106,7 @@ async function run(userId) {
       
     } catch (error) {
       console.error(`❌ ${client.name} 失敗: ${error.message}`);
+      console.error(`   スタック: ${error.stack}`);
       results.push({ name: client.name, success: false, error: error.message });
     }
     
