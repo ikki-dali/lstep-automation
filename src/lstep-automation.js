@@ -365,6 +365,124 @@ async function switchLineAccount(page, targetAccountName) {
   }
 }
 
+/**
+ * プリセット選択からCSVダウンロードまでを実行
+ */
+async function selectPresetAndExport(page, presetName, timeout = 60000) {
+  await delay(3000);
+  
+  console.log(`   🔍 プリセット「${presetName}」を探しています...`);
+
+  const result = await page.evaluate((presetName) => {
+    const rows = Array.from(document.querySelectorAll('tr'));
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const text = row.textContent;
+
+      if (text.includes(presetName)) {
+        const buttons = row.querySelectorAll('button, a');
+        
+        for (const button of buttons) {
+          const buttonText = button.textContent || button.innerText || '';
+          
+          // 「表示項目をコピー」ボタンを探す
+          if (buttonText.includes('表示項目') && buttonText.includes('コピー')) {
+            button.click();
+            return { success: true, method: 'コピーボタン', buttonText: buttonText.trim() };
+          }
+          
+          // CSVエクスポートボタンを探す
+          if (!buttonText.includes('コピー') && 
+              (buttonText.includes('CSVエクスポート') || buttonText.includes('エクスポート'))) {
+            button.click();
+            return { success: true, method: 'エクスポートボタン', buttonText: buttonText.trim() };
+          }
+        }
+      }
+    }
+    return { success: false };
+  }, presetName);
+
+  if (!result.success) {
+    throw new Error(`プリセット "${presetName}" のボタンが見つかりません`);
+  }
+
+  console.log(`   ✅ ${result.method}をクリック: ${result.buttonText}`);
+
+  // ページ遷移を待つ
+  await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
+  await delay(2000);
+
+  // 「この条件でダウンロード」ボタンを探してクリック
+  console.log('   🔍 「ダウンロード」ボタンを探しています...');
+  
+  const downloadClicked = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button, a'));
+    for (const button of buttons) {
+      const text = button.textContent || button.innerText || '';
+      if (text.includes('ダウンロード') || text.includes('download')) {
+        button.click();
+        return { success: true, text: text.trim() };
+      }
+    }
+    return { success: false };
+  });
+
+  if (!downloadClicked.success) {
+    throw new Error('「ダウンロード」ボタンが見つかりません');
+  }
+
+  console.log(`   ✅ 「${downloadClicked.text}」をクリック`);
+
+  // CSV生成を待つ
+  console.log('   ⏳ CSV生成中...');
+  await delay(5000);
+
+  // ページをリロード
+  await page.reload({ waitUntil: 'networkidle0' });
+  await delay(3000);
+
+  // 履歴からダウンロード
+  console.log('   🔍 エクスポート履歴からダウンロードボタンを探しています...');
+  
+  const historyDownload = await page.evaluate((presetName) => {
+    const tables = Array.from(document.querySelectorAll('table'));
+    
+    for (const table of tables) {
+      const rows = Array.from(table.querySelectorAll('tr'));
+      
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const row = rows[i];
+        const rowText = row.textContent;
+        
+        if (rowText.includes(presetName) || (rowText.includes('コピー') && rowText.match(/\d+/))) {
+          const buttons = Array.from(row.querySelectorAll('button, a'));
+          
+          for (let j = buttons.length - 1; j >= 0; j--) {
+            const button = buttons[j];
+            const buttonText = button.textContent || '';
+            
+            if (buttonText.includes('表示項目') || buttonText.includes('コピー')) continue;
+            
+            if (buttonText.includes('ダウンロード') || buttonText.includes('download')) {
+              button.click();
+              return { success: true, text: buttonText.trim() };
+            }
+          }
+        }
+      }
+    }
+    return { success: false };
+  }, presetName);
+
+  if (!historyDownload.success) {
+    throw new Error('履歴のダウンロードボタンが見つかりません');
+  }
+
+  console.log(`   ✅ 履歴からダウンロード: ${historyDownload.text}`);
+}
+
 async function navigateToExportPage(page, browser) {
   console.log('�� 友達リストからエクスポートページへ移動中...');
   
@@ -995,4 +1113,209 @@ export async function exportCSV(exporterUrl, presetName, clientName, options = {
   }
 }
 
-export default { exportCSV };
+/**
+ * 複数クライアントを1つのブラウザセッションで連続処理
+ * ログインは最初の1回だけ！
+ */
+export async function exportMultipleCSV(clients, options = {}) {
+  const {
+    timeout = 60000,
+    screenshotOnError = true,
+    headless = true,
+    userDataDir,
+    email,
+    password,
+  } = options;
+
+  const browserDataDir = userDataDir || path.join(process.cwd(), '.browser-data', 'shared');
+  await cleanupBrowserLocks(browserDataDir);
+  await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
+  await fs.mkdir(LOGS_DIR, { recursive: true });
+
+  let browser;
+  const results = [];
+
+  try {
+    console.log('🚀 ブラウザ起動中（全クライアント共通）...');
+
+    const launchOptions = {
+      headless: headless === true ? 'new' : headless,
+      userDataDir: browserDataDir,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
+      ],
+      dumpio: false,
+      protocolTimeout: 180000,
+    };
+
+    if (CHROME_EXECUTABLE_PATH) {
+      launchOptions.executablePath = CHROME_EXECUTABLE_PATH;
+    }
+
+    browser = await launchBrowserWithRetry(launchOptions);
+    let page = await browser.newPage();
+    console.log('✅ ブラウザ起動完了');
+
+    const client = await page.createCDPSession();
+    await client.send('Page.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: DOWNLOADS_DIR,
+    });
+
+    let isLoggedIn = false;
+    let needVisibleBrowser = false;
+
+    // 最初のクライアントでログイン状態を確認
+    console.log('📍 ログイン状態を確認中...');
+    await page.goto(clients[0].exporterUrl, {
+      waitUntil: 'networkidle0',
+      timeout: timeout,
+    });
+
+    let currentPageTitle = await page.title();
+    console.log(`   ページタイトル: ${currentPageTitle}`);
+
+    if (currentPageTitle.includes('ログイン')) {
+      if (process.env.CI) {
+        throw new Error('ログインセッションが期限切れです。CI環境ではログインできません。');
+      }
+
+      // ヘッドレスモードならブラウザを再起動
+      if (headless) {
+        console.log('⚠️  ログインが必要です。ブラウザを表示モードで再起動します...');
+        await browser.close();
+
+        const visibleLaunchOptions = {
+          headless: false,
+          userDataDir: browserDataDir,
+          args: launchOptions.args,
+          dumpio: false,
+          protocolTimeout: 180000,
+        };
+
+        if (CHROME_EXECUTABLE_PATH) {
+          visibleLaunchOptions.executablePath = CHROME_EXECUTABLE_PATH;
+        }
+
+        browser = await launchBrowserWithRetry(visibleLaunchOptions);
+        page = await browser.newPage();
+        needVisibleBrowser = true;
+
+        const newClient = await page.createCDPSession();
+        await newClient.send('Page.setDownloadBehavior', {
+          behavior: 'allow',
+          downloadPath: DOWNLOADS_DIR,
+        });
+
+        await page.goto(clients[0].exporterUrl, {
+          waitUntil: 'networkidle0',
+          timeout: timeout,
+        });
+      }
+
+      // ログイン処理
+      await waitForLogin(page, email, password);
+      isLoggedIn = true;
+      console.log('✅ ログイン完了！続けて全クライアントを処理します。');
+    } else {
+      isLoggedIn = true;
+      console.log('✅ 既にログイン済み');
+    }
+
+    // 全クライアントを連続処理
+    for (let i = 0; i < clients.length; i++) {
+      const clientConfig = clients[i];
+      console.log('');
+      console.log(`════════════════════════════════════════════════════════════`);
+      console.log(`[${i + 1}/${clients.length}] ${clientConfig.name}`);
+      console.log(`════════════════════════════════════════════════════════════`);
+
+      try {
+        // LINE公式アカウントを切り替え
+        await switchLineAccount(page, clientConfig.name);
+        await delay(2000);
+
+        // エクスポートページに移動
+        console.log('📍 エクスポートページに移動中...');
+        await page.goto(clientConfig.exporterUrl, {
+          waitUntil: 'networkidle0',
+          timeout: timeout,
+        });
+
+        let currentUrl = page.url();
+        currentPageTitle = await page.title();
+
+        // 友達リストに飛んだ場合
+        if (currentUrl.includes('/friend') || currentUrl.includes('/line/show')) {
+          console.log('   📍 友達リストからエクスポートページへ移動中...');
+          page = await navigateToExportPage(page, browser);
+        }
+
+        // プリセット選択とCSVエクスポート
+        console.log('📍 プリセット選択中...');
+        await selectPresetAndExport(page, clientConfig.presetName, timeout);
+
+        // ダウンロード完了を待つ
+        console.log('📥 CSVダウンロード待機中...');
+        const downloadedFile = await waitForCSVDownload(DOWNLOADS_DIR, 60000);
+
+        console.log(`✅ ${clientConfig.name} CSV取得完了: ${downloadedFile}`);
+        results.push({
+          name: clientConfig.name,
+          success: true,
+          csvPath: downloadedFile
+        });
+
+      } catch (clientError) {
+        console.error(`❌ ${clientConfig.name} 失敗: ${clientError.message}`);
+        if (screenshotOnError) {
+          try {
+            const timestamp = new Date().toISOString().replace(/:/g, '-');
+            const screenshotPath = path.join(LOGS_DIR, `error_${clientConfig.name}_${timestamp}.png`);
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            console.log(`📸 スクリーンショット保存: ${screenshotPath}`);
+          } catch (e) {}
+        }
+        results.push({
+          name: clientConfig.name,
+          success: false,
+          error: clientError.message
+        });
+      }
+    }
+
+    return results;
+
+  } finally {
+    if (browser) {
+      console.log('');
+      console.log('🔒 ブラウザを閉じています...');
+      await browser.close();
+      console.log('✅ ブラウザを閉じました');
+    }
+  }
+}
+
+// CSVダウンロード完了を待機するヘルパー
+async function waitForCSVDownload(downloadDir, timeout = 60000) {
+  const startTime = Date.now();
+  const existingFiles = new Set(await fs.readdir(downloadDir).catch(() => []));
+
+  while (Date.now() - startTime < timeout) {
+    await delay(1000);
+    const currentFiles = await fs.readdir(downloadDir).catch(() => []);
+    
+    for (const file of currentFiles) {
+      if (!existingFiles.has(file) && file.endsWith('.csv') && !file.endsWith('.crdownload')) {
+        return path.join(downloadDir, file);
+      }
+    }
+  }
+
+  throw new Error('CSVダウンロードがタイムアウトしました');
+}
+
+export default { exportCSV, exportMultipleCSV };
